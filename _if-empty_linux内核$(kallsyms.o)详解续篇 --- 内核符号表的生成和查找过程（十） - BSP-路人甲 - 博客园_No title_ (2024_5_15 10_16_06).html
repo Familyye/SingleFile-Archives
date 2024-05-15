@@ -1,0 +1,763 @@
+<!DOCTYPE html> <html lang=zh-cn style=--olcb-folder-code-block-max-height:80vh;--cnb-code-bg:rgb(255,255,255);--cnb-code-font-size:16px;--cnb-code-color:rgb(0,0,0);scrollbar-width:auto><!--
+ Page saved with SingleFile 
+ url: https://www.cnblogs.com/jianhua1992/p/16852796.html 
+ saved date: Wed May 15 2024 10:16:06 GMT+0800 (中国标准时间)
+--><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1.0">
+<meta name=referrer content=origin-when-cross-origin>
+<meta name=description content="在内核中维护者一张符号表，记录了内核中所有的符号（函数、全局变量等）的地址以及名字（非栈变量），这个符号表（.tmp_vmlinux2.o）被嵌入到内核镜像中，使得内核可以在运行过程中随时获得一个符号地址对应的符号名。而内核代码中可以通过调用 __print_symbol(const char *f">
+<meta property=og:description content="在内核中维护者一张符号表，记录了内核中所有的符号（函数、全局变量等）的地址以及名字（非栈变量），这个符号表（.tmp_vmlinux2.o）被嵌入到内核镜像中，使得内核可以在运行过程中随时获得一个符号地址对应的符号名。而内核代码中可以通过调用 __print_symbol(const char *f">
+<meta http-equiv=Cache-Control content=no-transform>
+<meta http-equiv=Cache-Control content=no-siteapp>
+<meta http-equiv=X-UA-Compatible content="IE=edge">
+<title>linux内核$(kallsyms.o)详解续篇 --- 内核符号表的生成和查找过程（十） - BSP-路人甲 - 博客园</title>
+<link rel=canonical href=https://www.cnblogs.com/jianhua1992/p/16852796.html>
+<style>#home :not(.cnblogs_code):not(.cnblogs_Highlighter)>pre:not([highlighted]):not([class*="brush:"]) code:not(.hljs),:not(.cnblogs_code):not(.cnblogs_Highlighter)>pre:not([highlighted]):not([class*="brush:"]) code:not(.hljs){background:rgb(255,255,255);padding:16px;border:0px rgb(0,0,0);border-radius:0px;border-color:transparent;color:rgb(0,0,0);font-family:monospace;font-size:16px}body{tab-size:4}input[type="button"]{-webkit-appearance:button}img{max-width:100%;height:auto}#blog_post_info_block{margin-top:20px}#BlogPostCategory{margin-bottom:10px}.cnblogs-markdown :not(pre,div,td)>code,.blogpost-body :not(pre,div,td)>code{font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace,sans-serif;font-size:12px;padding:0 5px;line-height:1.8;margin:0 3px;display:inline-block;overflow-x:auto;vertical-align:middle;border-radius:3px;background-color:#fbe5e1;color:#c0341d}code{font-family:inherit}pre code table,.hljs-engine pre,.hljs-engine pre code{transition-duration:.2s;transition-property:background,font-size,border-color,border-radius,border-width,padding,margin,color}.blogpost-body pre code{line-height:1.5;margin:0}pre{overflow:auto}.div_my_zzk{margin-top:5px;margin-bottom:5px;display:flex;align-items:center}.input_my_zzk{vertical-align:middle;height:24px;border-radius:5px;border-width:1px;width:100%}input.btn_my_zzk{vertical-align:middle;height:26px;font-size:12px;padding-left:5px;padding-right:5px;cursor:pointer}pre{margin-top:0;margin-bottom:0}#author_profile{float:left;width:280px;margin-top:0;margin-bottom:10px;color:#000;margin-left:0;font-size:12px}#author_profile a:hover{text-decoration:underline}.author_avatar{vertical-align:top;float:left;margin-right:5px;padding-top:5px;padding-left:2px;border:0}.author_profile_info{float:left;line-height:18px}#div_digg{float:right;margin-bottom:10px;margin-right:30px;font-size:12px;width:125px;text-align:center;margin-top:10px}.diggit{float:left;width:46px;height:52px;background:url(data:image/gif;base64,R0lGODlhLgA0AMQAAP/00P/22vfqt/b29v/11f/45P/56P/34PjtwfXlqf/55v/11//00v/44vnwyfn5+f/22Pbnrf/21vny0Pn00//33vDw8P/12KioqP/10ufm61B1uv/33f/33P////H4+iH5BAAAAAAALAAAAAAuADQAAAX/oJeMZGmeaJqKQOu+cCzPcxLJmZvlcM4DPlosE4kwMsfdLrlEIo8MZvRJjTKbxaZyy+16v94iYUwum8/odDlDjgjU8Lh8LBAs7mQ8YTHmS/aAfHyBeHeCg3l1dxAQFwsXkBeMjJILEJaNko2bk4+Pl4x3knUBpaanqKmqq6sCCAEdsR2ws6mytbSwprGns766HQgIHByxxR3FxMi3y8nIycTO0MqywtTH0Mu30s/PytLRt9bYxt3Hstzf4eDUsePlzc7bzebr8e3Bw+Tx2uj06t/unct3rVzAeeC8pQtXTR+8bAP/1Qs4beA7bRCZLVT4j6E7hxjNaezIkZ1FkOQO//pLGG0hvosp5a3k17LjSwQVcurcybOnz58/ETg4QLSo0aNIkypV6sBBg6dPC0CdWkBqg6pTs1q1qpWrgwlVw4odS7as2bMTJihYy7at27dw48adQMGA3bt48+rdy5cv3b6AAwu2S8EDhcOIEytezLhxYw+QI0ueTLmy5cuYM2veDPmD58+gQ4seTbq0htIPBqguzbq159OjH2jQgEHDANe4RcMWPUCDBwsYHuQe/pr0bA8PMNwmnnt36N6/lYve8Jk69enVdYdO3ds38OWgr4sPv6G8+fOfndPGwB5DdPAf0J8vjz2+ds8eMFigPEB/aOvjVTfffOl91t96+0X2HYB58REYHmu7JWfZgp7RZ9+FDw4I2m79teebgrVVeGGAD5ZYoGcSVjbBBvCJ52CDDb4Y4Xq1SQYcBSWSaN91Ioa222+0WSDkkBiwmGOPJmJ4ooHsbVDkkw4I6CJ62cV4H2gPFHDABVsWAB9zEIIppnFjlrnhbGimqeaabLbp5mwhAAA7)no-repeat;text-align:center;cursor:pointer;margin-top:2px;padding-top:5px}.diggnum{font-size:14px;color:#075db3;font-family:Verdana}.buryit{float:right;margin-left:20px;width:46px;height:52px;background:url(data:image/gif;base64,R0lGODlhLgA0AMQAAP////39/fn5+fj4+Pb29vX19fPz8/Ly8vHx8fDw8O/v7+7u7u3t7ezs7Ovr6+rq6ujo6Ofn5+bm5uXl5ePj4+Li4uHh4dzc3NfX19HR0c/Pz6qqqqioqKenp4WFhYODgyH5BAQUAP8ALAAAAAAuADQAAAX/IKCNZGmeaJqKUeu+cCzP80jfeN5mGeT/wKBwSCTyisik0sd7OJ/QqHRKpWYw1ax268RgHGDuFkwuO6Res3rNbre9jbh8Tq/b73fMpcHo+xl2f3iDdRcXC4iJiol/jY2LkIh/hpGQjpcMlYuTh5qMmI+ekn6UogugoaKcpqeofqyrpq6vsqSdqrOZtX2luLOwtsC/uwy9nrm6vsW3x7nCy6zR0ogXFgrX2Nna29zd3RYWCeLj5OXm5+jo4Ajs7e7v8PHy8hQUB/f4+fr7/P399QYCChxIsKDBgwcBIlzIsKGBCQAmSJxIsaLFixgxAtjIsaPHjyBDihxJsqTJjQVS8KpcybKly5cwIcCcSbOmSpk2c+pMiZOlAHYOFDhAQGBnzp4rN2z4wIEp0wpGayIFkOABB3MdPBh4+aHrB5pfb64UYJUDBwgdFXCYsNJr2LZu265EKoBDSAoftqp8O5MvX6QFzJpFyzHBWbhuu+5NmVgxz7EcAoA0XHQxS78FMItdedZsgo4HOFRmnNmy3NKoH6sEwAHBxwEcFlxOzZc06b8sIwg2S5WD3tNfa5cOG3xuSwEECPjoPdq2c8uaVb9ES3l25uKmoxcAPBdt3ebB/Tpu6dV4TAChBUSVClOADw4Smq93yX1scvnzWy7Zzz9ICAA7)no-repeat;text-align:center;cursor:pointer;margin-top:2px;padding-top:5px}.burynum{font-size:14px;color:#075db3;font-family:Verdana}.diggword{margin-top:5px;margin-left:0;font-size:12px;color:#808080}#div_digg a.tip:link,#div_digg a.tip:visited,#div_digg a.tip:hover,#div_digg a.tip:active{color:#075db3;text-decoration:none;border-bottom:none}#div_digg a.tip:hover,#div_digg a.tip:active{text-decoration:underline}#profile_block{margin-top:5px;line-height:1.5;text-align:left}#post_next_prev{line-height:1.8;font-size:12px}#post_next_prev a.p_n_p_prefix:link{text-decoration:none}#post_next_prev a.p_n_p_prefix:hover{text-decoration:underline}blockquote{padding-left:10px;padding-right:10px;padding-top:5px;padding-bottom:5px;margin-top:10px;margin-bottom:10px}.blogpost-body blockquote{border-left:3px solid #e2dfdf;border-right:none;border-top:none;border-bottom:none;margin:10px 0;padding:5px 10px;color:#555}#cnblogs_post_body blockquote{background-image:none}.under-post-card{margin-top:10px;line-height:1.5}#green_channel{padding:10px 0;margin-bottom:20px;margin-top:10px;border:#c0c0c0 1px dashed;font-size:12px;width:350px;text-align:center}#green_channel a{background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAkCAYAAABIdFAMAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAHhJREFUeNo8zjsOxCAMBFB/KEAUFFR0Cbng3nQPw68ArZdAlOZppPFIBhH5EAB8b+Tlt9MYQ6i1BuqFaq1CKSVcxZ2Acs6406KUgpt5/LCKuVgz5BDCSb13ZO99ZOdcZGvt4mJjzMVKqcha68iIePB86GAiOv8CDADlIUQBs7MD3wAAAABJRU5ErkJggg%3D%3D)repeat-x;display:inline-block;padding:3px 8px;color:#fff;text-decoration:none;font-weight:bold;cursor:pointer;margin-right:10px;-moz-border-radius:5px;-webkit-border-radius:10px;-moz-box-shadow:0 1px 3px rgba(0,0,0,.5);-webkit-box-shadow:0 1px 3px rgba(0,0,0,.5);text-shadow:0-1px 1px rgba(0,0,0,.25);vertical-align:middle}#green_channel a:hover{background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAyCAYAAACd+7GKAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAClJREFUeNpi/v//vwMTAwPDfzjBgMpFI/7hFSOT9Y8qRuF3JLoHAQIMAHYtMmRA+CugAAAAAElFTkSuQmCC)}#green_channel #green_channel_digg{background-color:#2daebf}#green_channel #green_channel_follow{background-color:#e33100}#green_channel #green_channel_favorite{background-color:#ffb515}#green_channel #green_channel_wechat{background-color:#4eab57}#cnblogs_post_body{margin-bottom:20px}#cnblogs_post_body li{list-style:inherit}#cnblogs_post_body ul{margin-left:30px;padding-left:0;list-style-type:disc}#cnblogs_post_body table{border-collapse:collapse;word-break:break-word}#cnblogs_post_body .table-wrapper{display:block;overflow-x:auto}#cnblogs_post_body th{background-color:#fafafa}.blogpost-body th,.blogpost-body td,.blogpost-body th,.blogpost-body td{border:1px solid #c0c0c0;border-collapse:collapse;padding:8px 14px;min-width:50px}.ad_text_commentbox{margin-top:5px;margin-bottom:5px}#opt_under_post{line-height:1.8}.recent_comment_author{text-align:right;margin-right:4px}#HistoryToday{max-width:600px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}input::-moz-focus-inner{border:0;padding:0}.CalTitle{width:100%}.recent_comment_body{word-wrap:break-word}#cnblogs_post_body{word-break:break-word}#cnblogs_post_body>pre,#cnblogs_post_body p{margin:10px auto}#cnblogs_post_body p{text-indent:0}#div_digg .diggnum{line-height:1.5em!important}#div_digg .burynum{line-height:1.5em!important}#green_channel a:link,#green_channel a:visited,#green_channel a:active{color:#fff!important;border:none!important}.vertical-middle>*{vertical-align:middle}#blog-news{overflow:hidden}.category-item-link{word-break:break-word}.sidebar-card-title-a,a.sidebar-card-title-a:link,a.sidebar-card-title-a:visited{font-style:inherit!important;font-weight:inherit!important;font-size:inherit!important;color:inherit!important}@keyframes fadeIn{0%{opacity:0}100%{opacity:var(--cnb-code-toolbar-initial-opacity)}}pre:fullscreen,pre:fullscreen code{box-sizing:border-box;border-radius:0;height:100vh;width:100vw}.login_tips{background-image:url(data:image/gif;base64,R0lGODlhEAAQAOZbAOny/v3+/lqIuT1wIOLu/lOMKKnB2omqzbTJ34+8Z9vq/c7c6tfo/ZSwhJOx0WyVwJGugWCJSbLSlff5/Pv8/efu9Y26ZDdrGUFzJXCYwuDt/vP3+uvx94usztrk793s/m6XwYe5YN/s/qO92Iu6YnCWXpeyiOnv9tXm/bHTkKa9mZ241dDj/dzm8Ex7Mejx/lePLd3r/vn7/NHk/eXw/tDk/dPm/dTm/dzq/d7s/tbn/WaOT3ugx2+XwuTv/o+7arbUnNnp/dDmurHFq9zr/X2iyF+Mu+bw/pm21Obx/oe6YFyKuvD2/oWny7HWktrp/Yy8ZYKjk+Pv/uHu/r7Q4z9xItHk/LTUlYGrYViHuP///////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAAFsALAAAAAAQABAAAAemgFuCg4SFhoeGGw5LWY2OWU0VhB0GFFqXmFoIGRSCEwIBTABJPlM5CjhaPC2CHA9aL0dSGh8KDChaBwutrzQEGjFPDDczubtbnwEAIkRBOjY1VlpFHoOUAZgELACaGTKDigKNK5dDJTsRKog9FVFYV0I/MBCGI0hGESlOWlAJA4UnQFDZ4gIIJgkXEG2pQkKJlhD+FJooYEGChQL0FDbAcAFDgy2BAAA7);background-repeat:no-repeat;margin-top:10px;padding:0 0 10px 25px;font-weight:400}.login_tips a{text-decoration:underline!important}.clear{clear:both}#comment_nav{text-align:right;display:flex;align-items:center;width:100%}.comment-nav-left{margin-right:auto;margin-left:15px}.comment-nav-right{margin-left:auto}#comment_nav a{padding-left:10px}:root{--highlighted-line-bg:#d1e3c9;--highlighted-line-bg-dark:#264b33}:root{--cnblogs-current-collection-bg-color:rgba(245,245,245,.98);--cnblogs-current-collection-highlight-color:rgba(255,255,255,.9);--cnblogs-current-collection-hover-color:rgba(255,255,255,.7);--cnblogs-current-collection-active-color:rgba(255,255,255,.8);--cnblogs-current-collection-color:#000}@keyframes collapse{from{max-height:80vh;max-height:80vh;max-height:var(--olcb-folder-code-block-scroll-height,80vh)}to{max-height:80vh;max-height:80vh;max-height:var(--olcb-folder-code-block-max-height,80vh)}}@keyframes expand{from{max-height:80vh;max-height:80vh;max-height:var(--olcb-folder-code-block-max-height,80vh);overflow-y:hidden}to{max-height:"";max-height:"";max-height:var(--olcb-folder-code-block-scroll-height,"");overflow-y:hidden}}@keyframes modal-open{0%{height:0;opacity:0}95%{height:505px}100%{height:auto;opacity:1}}:root{--cnblogs-toc-bg-color:rgba(245,245,245,.98);--cnblogs-toc-highlight-color:rgba(255,255,255,.9);--cnblogs-toc-color:#000}body{min-height:100vh}@keyframes wb-fade-in{0%{opacity:0}to{opacity:.85}}.hljs-number{color:#800}/*!
+ * ui-dialog.css
+ * Date: 2014-07-03
+ * https://github.com/aui/artDialog
+ * (c) 2009-2014 TangBin, http://www.planeArt.cn
+ *
+ * This is licensed under the GNU LGPL, version 2.1 or later.
+ * For details, see: http://www.gnu.org/licenses/lgpl-2.1.html
+ */@-webkit-keyframes ui-dialog-loading{0%{-webkit-transform:rotate(0deg)}100%{-webkit-transform:rotate(360deg)}}@keyframes ui-dialog-loading{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.hljs .hljs-ln .hljs-ln-line{border-collapse:initial;padding:initial;border:none;min-width:initial}.hljs .hljs-ln .hljs-ln-line.hljs-ln-numbers{-webkit-touch-callout:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;text-align:center;vertical-align:top;padding:0 14px;color:#bfbfbf;white-space:nowrap}body{font-size:14px;font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue","Helvetica","Arial",sans-serif;margin-left:20px;margin-right:20px;margin-top:0;margin-bottom:10px;padding:30px;padding-bottom:10px;padding-top:0;background-color:#d9d6cb}img{border:0}td{font-size:14px}a{color:#235;text-decoration:none}a:hover{text-decoration:underline}#header h1{margin:0;padding-top:10px;font-size:1.8em;margin-left:5px}#header h1 a:visited,#header h1 a:active,#header h1 a:link,#header h1 a:hover{color:#fff;margin-top:10px;text-decoration:none}h2{margin-top:10px}#top{background-color:#20375f;height:75px;vertical-align:middle;color:#ccc;padding-left:10px}#sub{text-align:right;background-color:#000;color:#ccc;font-size:14px;padding:4px;padding-left:10px}.headermaintitle{font-family:"Trebuchet MS";padding-bottom:10px;color:#ccc}#subtitle{color:#fff;font-size:1em;margin-top:10px;margin-left:6px}blockquote{background-color:#eee;border:0}#leftmenu{float:left;left:0;width:250px;padding:0;padding-bottom:5px;padding-left:5px;overflow:hidden;background-color:#eee}#leftmenu h3{font-size:14px;margin:0;padding:4px;border-bottom:1px solid #bbb}#leftmenu ul{list-style:none;margin:5px;padding:0;margin-left:8px;margin-bottom:5px;font-size:13px}#leftmenu li{display:block;margin-bottom:2px}#leftmenu a:active,#leftmenu a:visited,#leftmenu a:link{display:inline-block;color:#000;text-decoration:none;margin-right:0;padding:0}#leftmenu a:hover{background-color:#ccd5e0}#main_content{float:right;margin-left:-260px;width:100%}#content{margin-left:254px;padding-right:0;margin-right:0;border-left:1px solid #ddd;border-bottom:1px solid #ddd;padding:10px;background-color:#fff}#content h2{font-size:20px}#content .post{font-size:14px;line-height:1.8;padding-left:10px}#footer{margin:0;padding-top:5px;text-align:center;font-size:14px}p{margin:0}.post{border:1px solid #ccc;border-bottom-width:2px;border-right-width:2px;padding:4px;margin-bottom:28px}.postbody a{color:#1d58d1}.post h2{margin:0;margin-bottom:4px}.post .postfoot{margin:0;margin-top:14px;color:#aaa;border-top:1px solid #ddd;font-size:14px}pre{margin-left:22px;font-size:1em}input{font-family:Verdana,Geneva,Arial,Sans-Serif;font-size:14px}.Cal{border:1px solid #999;width:98%;font-family:Arial;font-size:13px;margin-top:10px;margin-bottom:10px;height:180px;background-color:#eee;margin-left:0}.CalTitle{background-color:#b6b6b6;border-color:#adf;font-family:Arial;font-size:14px;color:#000;margin-left:0;padding:0;height:100%;font-weight:bold}.CalOtherMonthDay{color:#808080}.CalDayHeader{background-color:#ccc}.CalTodayDay{color:#00f;font-weight:bolder}p{margin-top:0;margin-bottom:0}blockquote{width:80%}#profile_block{margin-left:10px}</style>
+<style media="(prefers-color-scheme: light)">/*!
+  Theme: Default
+  Description: Original highlight.js style
+  Author: (c) Ivan Sagalaev <maniac@softwaremaniacs.org>
+  Maintainer: @highlightjs/core-team
+  Website: https://highlightjs.org/
+  License: see project LICENSE
+  Touched: 2021
+*/pre code.hljs{display:block;overflow-x:auto;padding:1em}.hljs{background:#f3f3f3;color:#444}.hljs-comment{color:#697070}.hljs-number,.hljs-string,.hljs-type{color:#800}.hljs-title{color:#800}.hljs-literal{color:#695}</style>
+<style>pre code.hljs{display:block;overflow-x:auto;padding:1em}.hljs{background:#fff;color:#000}.hljs-comment{color:green}.hljs-keyword{color:#00f}.hljs-literal,.hljs-string,.hljs-title,.hljs-type{color:#a31515}</style>
+<style media="only screen and (max-width: 767px)">body{font-size:14px!important;-webkit-text-size-adjust:none}.forpc{display:none!important}#blog_nav_rss{display:none!important}#blog_nav_rss_image{display:none!important}#blog_nav_newpost{display:none!important}#green_channel{width:100%}#sidebar_search_box input[type=text]{width:260px}#cnblogs_post_body table{display:block;overflow-x:scroll;-webkit-overflow-scrolling:regular;max-height:800px}#cnblogs_post_body table::-webkit-scrollbar-track{-webkit-box-shadow:inset 0 0 6px rgba(0,0,0,.3);border-radius:10px;background-color:#f5f5f5}#cnblogs_post_body table::-webkit-scrollbar{width:12px;background-color:#f5f5f5}#cnblogs_post_body table::-webkit-scrollbar-thumb{border-radius:10px;-webkit-box-shadow:inset 0 0 6px rgba(0,0,0,.3);background-color:#555}.commentform{margin-left:10px}.cnblogs-markdown :not(pre,div,td)>code,.blogpost-body :not(pre,div,td)>code{white-space:pre-wrap}body{margin:0;padding:0}#main_content{float:none;margin-left:0}#leftmenu{float:none;width:auto}#content{margin-left:0}#content h2{font-size:16px}.post .postfoot{font-size:12px}div.RecentComment{width:auto}</style>
+<link type=application/rss+xml rel=alternate href=https://www.cnblogs.com/jianhua1992/rss>
+<link type=application/rsd+xml rel=EditURI href=https://www.cnblogs.com/jianhua1992/rsd.xml>
+<link type=application/wlwmanifest+xml rel=wlwmanifest href=https://www.cnblogs.com/jianhua1992/wlwmanifest.xml>
+<style>.hljs-ln-n:before{content:attr(data-line-number)}</style><meta property=og:image content=https://assets.cnblogs.com/logo_square.png><style data-id=immersive-translate-input-injected-css>@keyframes immersiveTranslateShadowRolling{0%{box-shadow:0px 0 rgba(255,255,255,0),0px 0 rgba(255,255,255,0),0px 0 rgba(255,255,255,0),0px 0 rgba(255,255,255,0)}12%{box-shadow:100px 0 var(--loading-color),0px 0 rgba(255,255,255,0),0px 0 rgba(255,255,255,0),0px 0 rgba(255,255,255,0)}25%{box-shadow:110px 0 var(--loading-color),100px 0 var(--loading-color),0px 0 rgba(255,255,255,0),0px 0 rgba(255,255,255,0)}36%{box-shadow:120px 0 var(--loading-color),110px 0 var(--loading-color),100px 0 var(--loading-color),0px 0 rgba(255,255,255,0)}50%{box-shadow:130px 0 var(--loading-color),120px 0 var(--loading-color),110px 0 var(--loading-color),100px 0 var(--loading-color)}62%{box-shadow:200px 0 rgba(255,255,255,0),130px 0 var(--loading-color),120px 0 var(--loading-color),110px 0 var(--loading-color)}75%{box-shadow:200px 0 rgba(255,255,255,0),200px 0 rgba(255,255,255,0),130px 0 var(--loading-color),120px 0 var(--loading-color)}87%{box-shadow:200px 0 rgba(255,255,255,0),200px 0 rgba(255,255,255,0),200px 0 rgba(255,255,255,0),130px 0 var(--loading-color)}100%{box-shadow:200px 0 rgba(255,255,255,0),200px 0 rgba(255,255,255,0),200px 0 rgba(255,255,255,0),200px 0 rgba(255,255,255,0)}}</style><meta name=vs_showGrid content=False class=sf-hidden><link rel="shortcut icon" id=favicon href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2l0aD0iNjQiIGhlaWdodD0iNjQiPjxkZWZzPjxjbGlwUGF0aCBpZD0icHJlZml4X19jbGlwLXBhdGgiPjxwYXRoIGNsYXNzPSJwcmVmaXhfX2Nscy0xIiBkPSJNMjkuNDggMjUuMjRjLS4xNi0xLjg5LS4wOC0xLjUtLjI0LTMuMTZhNzIuMjQgNzIuMjQgMCAwMC0yLTEwLjM3TDI2IDYuMjVsLTIuNiA1LjQxLS40NC44OXEtLjI0LjQ4LS41NCAxYTIwLjQzIDIwLjQzIDAgMDEtMS4yNCAxLjg0IDIwLjA4IDIwLjA4IDAgMDEtMy4wOCAzLjI0IDE5LjcyIDE5LjcyIDAgMDEtMy44NyAyLjUzYy0uNzIuMzMtMS40NS43MS0yLjIzIDEtLjM0LjE0LTEuMTkuNDQtMS45My42NmEyLjU1IDIuNTUgMCAwMS0xLjA3LS4zYy0uMzQtMS0uODMtMi4yNC0xLjItMy4xOS0uNS0xLjI1LTEtMi41LTEuNTEtMy43M2E1OS4xMSA1OS4xMSAwIDAwLTMuNjItNy4yNSA1OS44MiA1OS44MiAwIDAwMS41MSA3Ljk0Yy4zIDEuMy43IDIuNTggMS4wNSAzLjg3UzYgMjIuNzEgNi40NCAyNGExLjQgMS40IDAgMDAxLjI5LjkzYzEuMjggMCAyLjU3LjA2IDMuODYuMDVzMi41OSAwIDMuODgtLjExYTU2IDU2IDAgMDA3Ljc5LS44N2MtMS45Mi0uNDktNy41LS44MS0xMC43OS0xLjA2YTQzIDQzIDAgMDA2LjUzLTEuNyAyNC4wNiAyNC4wNiAwIDAwNS4zOC0zLjQ1Yy43MS0uNjIgMS4yMSAxLjg4IDIuMzkgNS4yNy42MiAxLjY5LjM0IDEgMSAyLjY2czEuMzcgNC4zOCAyLjE3IDZjLS4wNy0xLjgyLS4zMS00LjY3LS40Ni02LjQ4eiIvPjwvY2xpcFBhdGg+PGNsaXBQYXRoIGlkPSJwcmVmaXhfX2NsaXAtcGF0aC0yIj48cGF0aCBjbGFzcz0icHJlZml4X19jbHMtMSIgZD0iTTIwLjkyIDMuNDZhNC4yNSA0LjI1IDAgMDEuMzEgNS44NiAzLjkxIDMuOTEgMCAwMS01LjY2LjI0IDQuMjUgNC4yNSAwIDAxLS4zMS01Ljg2IDMuOTEgMy45MSAwIDAxNS42Ni0uMjRtMS4zNS0xLjU0YTUuODkgNS44OSAwIDAwLTguNTMuMzYgNi40MSA2LjQxIDAgMDAuNDggOC44MyA1LjkxIDUuOTEgMCAwMDguNTMtLjM2IDYuNDEgNi40MSAwIDAwLS40OC04LjgzeiIvPjwvY2xpcFBhdGg+PHN0eWxlPi5wcmVmaXhfX2Nscy0xe2ZpbGw6IzNlM2EzOX1AbWVkaWEgKHByZWZlcnMtY29sb3Itc2NoZW1lOmRhcmspey5wcmVmaXhfX2Nscy0xe2ZpbGw6I2VmZWZlZn19PC9zdHlsZT48L2RlZnM+PGcgc3R5bGU9Imlzb2xhdGlvbjppc29sYXRlIj48ZyBpZD0icHJlZml4X19sYXllcl8xIiBkYXRhLW5hbWU9ImxheWVyIDEiPjxwYXRoIGNsYXNzPSJwcmVmaXhfX2Nscy0xIiBkPSJNMjkuNDggMjUuMjRjLS4xNi0xLjg5LS4wOC0xLjUtLjI0LTMuMTZhNzIuMjQgNzIuMjQgMCAwMC0yLTEwLjM3TDI2IDYuMjVsLTIuNiA1LjQxLS40NC44OXEtLjI0LjQ4LS41NCAxYTIwLjQzIDIwLjQzIDAgMDEtMS4yNCAxLjg0IDIwLjA4IDIwLjA4IDAgMDEtMy4wOCAzLjI0IDE5LjcyIDE5LjcyIDAgMDEtMy44NyAyLjUzYy0uNzIuMzMtMS40NS43MS0yLjIzIDEtLjM0LjE0LTEuMTkuNDQtMS45My42NmEyLjU1IDIuNTUgMCAwMS0xLjA3LS4zYy0uMzQtMS0uODMtMi4yNC0xLjItMy4xOS0uNS0xLjI1LTEtMi41LTEuNTEtMy43M2E1OS4xMSA1OS4xMSAwIDAwLTMuNjItNy4yNSA1OS44MiA1OS44MiAwIDAwMS41MSA3Ljk0Yy4zIDEuMy43IDIuNTggMS4wNSAzLjg3UzYgMjIuNzEgNi40NCAyNGExLjQgMS40IDAgMDAxLjI5LjkzYzEuMjggMCAyLjU3LjA2IDMuODYuMDVzMi41OSAwIDMuODgtLjExYTU2IDU2IDAgMDA3Ljc5LS44N2MtMS45Mi0uNDktNy41LS44MS0xMC43OS0xLjA2YTQzIDQzIDAgMDA2LjUzLTEuNyAyNC4wNiAyNC4wNiAwIDAwNS4zOC0zLjQ1Yy43MS0uNjIgMS4yMSAxLjg4IDIuMzkgNS4yNy42MiAxLjY5LjM0IDEgMSAyLjY2czEuMzcgNC4zOCAyLjE3IDZjLS4wNy0xLjgyLS4zMS00LjY3LS40Ni02LjQ4eiIvPjxnIGNsaXAtcGF0aD0idXJsKCNwcmVmaXhfX2NsaXAtcGF0aCkiPjxwYXRoIGNsYXNzPSJwcmVmaXhfX2Nscy0xIiBkPSJNLS44Ny0uNzhoMzQuNDJ2MzMuMDdILS44N3oiLz48L2c+PHBhdGggY2xhc3M9InByZWZpeF9fY2xzLTEiIGQ9Ik0yMC45MiAzLjQ2YTQuMjUgNC4yNSAwIDAxLjMxIDUuODYgMy45MSAzLjkxIDAgMDEtNS42Ni4yNCA0LjI1IDQuMjUgMCAwMS0uMzEtNS44NiAzLjkxIDMuOTEgMCAwMTUuNjYtLjI0bTEuMzUtMS41NGE1Ljg5IDUuODkgMCAwMC04LjUzLjM2IDYuNDEgNi40MSAwIDAwLjQ4IDguODMgNS45MSA1LjkxIDAgMDA4LjUzLS4zNiA2LjQxIDYuNDEgMCAwMC0uNDgtOC44M3oiLz48ZyBjbGlwLXBhdGg9InVybCgjcHJlZml4X19jbGlwLXBhdGgtMikiPjxwYXRoIGNsYXNzPSJwcmVmaXhfX2Nscy0xIiBkPSJNLS44Ny0uNzhoMzQuNDJ2MzMuMDdILS44N3oiLz48L2c+PC9nPjwvZz48L3N2Zz4=" type=image/svg+xml><style>.sf-hidden{display:none!important}</style><meta http-equiv=content-security-policy content="default-src 'none'; font-src 'self' data:; img-src 'self' data:; style-src 'unsafe-inline'; media-src 'self' data:; script-src 'unsafe-inline' data:; object-src 'self' data:; frame-src 'self' data:;"><style>img[src="data:,"],source[src="data:,"]{display:none!important}</style></head>
+<body class="skin-anothereon001 no-navbar hljs-engine">
+ <a name=top></a>
+ <div id=top_nav class="navbar forpc navbar-custom sf-hidden">
+ 
+ </div>
+ <div id=page_begin_html>
+ <a href=https://www.cnblogs.com/jianhua1992/category/2220181.html>MEMORY</a> |
+<a href=https://www.cnblogs.com/jianhua1992/>INTERRUPT</a> |
+<a href=https://www.cnblogs.com/jianhua1992/>TIMER</a> |
+<a href=https://www.cnblogs.com/jianhua1992/>并发与同步</a> |
+<a href=https://www.cnblogs.com/jianhua1992/>进程管理</a> |
+<a href=https://www.cnblogs.com/jianhua1992/>调度</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2220188.html>uboot</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2220189.html>DTB</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2243397.html>ARMV8</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2287112.html>ATF</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2238308.html>Kernel Data Structure</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2242540.html>PHY</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2295264.html>LINUX2.6</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2297619.html>驱动合集</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2343754.html>UART子系统</a> |
+<a href=https://www.cnblogs.com/jianhua1992/category/2297619.html>USB专题</a> |
+ </div>
+ <div id=wrapper>
+ <div id=header>
+ 
+<div id=top>
+<h1><a id=Header1_HeaderTitle class="headermaintitle HeaderMainTitle" href=https://www.cnblogs.com/jianhua1992>BSP-路人甲</a>
+</h1>
+<div id=subtitle>【BSP底层开发】成功不是将来才有的，而是从决定去做的那一刻起，持续累积而成。不争不抢，静下来，享受技术~
+联系方式：1163199455@qq.com</div>
+</div>
+<div id=sub><div class=BlogStats>随笔 - 58, 文章 - 0, 评论 - 7, 阅读 - 
+<span title="总阅读数: 43312">
+43312</span></div>
+</div>
+ </div>
+ <div id=main_container>
+ <div id=main_content>
+ <div id=content>
+ <div id=post_detail>
+ <div class=post>
+ <h2>
+ <a id=cb_post_title_url class="postTitle2 vertical-middle" href=https://www.cnblogs.com/jianhua1992/p/16852796.html title="发布于 2022-11-02 22:23">
+ <span role=heading aria-level=2>linux内核$(kallsyms.o)详解续篇 --- 内核符号表的生成和查找过程（十）</span>
+ 
+</a>
+ </h2>
+ <div class=postbody>
+ <div id=cnblogs_post_body class="blogpost-body blogpost-body-html">
+ <svg xmlns=http://www.w3.org/2000/svg style=display:none>
+ <path stroke-linecap=round d="M5,0 0,2.5 5,5z" id=raphael-marker-block style=-webkit-tap-highlight-color:rgba(0,0,0,0)></path>
+ </svg>
+ <p>在内核中维护者一张符号表，记录了内核中所有的符号（函数、全局变量等）的地址以及名字（非栈变量），这个符号表（.tmp_vmlinux2.o）被嵌入到内核镜像中，使得内核可以在运行过程中随时获得一个符号地址对应的符号名。而内核代码中可以通过调用 __print_symbol(const char *fmt, unsigned long address)打印符号名。</p> 
+<p>接下来我们就来介绍内核符号表的生成和查找过程。</p> 
+<p><font color=black size=4><strong>一. System.map和/proc/kallsyms区别联系</strong></font></p> 
+<p><font color=black size=3><strong>1. System.map文件</strong></font><br> System.map文件是编译内核时生成的，它记录了内核中的符号列表，以及符号在内存中的虚拟地址。这个文件实际上是通过调用scripts/mksysmap脚本在脚本中又调用nm命令生成的。详细的讲解请移步到<a href=https://blog.csdn.net/m0_47799526/article/details/106202622 rel=noopener>linux内核vmlinux的编译过程（七）</a>。</p> 
+<p>System.map中每个条目由三部分组成，例如：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>c0008000 T __init_begin</table></code></pre> 
+<p><strong>即“地址 符号类型 符号名”</strong></p> 
+<p>其中符号类型有如下几种：</p> 
+<div class=table-wrapper><table><thead><tr><th>符号类型名<th>英文解释<th>中文解释<tbody><tr><td>A<td>Absolute<td>符号的值是绝对值，并且在进一步链接过程中不会被改变<tr><td>B<td>Uninitialised data (.bss)<td>符号在未初始化数据区或区（section）中，即在BSS段中<tr><td>C<td>Comonsymbol<td>符号是公共的。公共符号是未初始化的数据。在链接时，多个公共符号可能具有同一名称。如果该符号定义在其他地方，则公共符号被看作是未定义的引用<tr><td>D<td>Initialised data<td>符号在已初始化数据区中<tr><td>G<td>Initialised data for small objects<td>符号是在小对象已初始化数据区中的符号。某些目标文件的格式允许对小数据对象(例如一个全局整型变量)可进行更有效的访问<tr><td>I<td>Indirectreference to another symbol<td>符号是对另一个符号的间接引用<tr><td>N<td>Debugging symbol<td>符号是一个调试符号<tr><td>R<td>Readonly<td>符号在一个只读数据区中<tr><td>S<td>Uninitialised data for small objects<td>符号是小对象未初始化数据区中的符号<tr><td>T<td>Textcode symbol<td>符号是代码区中的符号<tr><td>U<td>Undefined symbol<td>符号是外部的，并且其值为0（未定义）<tr><td>V<td>Weaksymbol<td>弱符号<tr><td>W<td>Weaksymbol<td>弱符号<tr><td>-<td>Stabs<td>符号是a.out目标文件中的一个stab符号，用于保存调试信息<tr><td>?<td>Unknown<td>符号的类型未知，或者与具体文件格式有关</table></div>
+<p><font color=black size=3><strong>2. /proc/kallsyms文件</strong></font><br> /proc/kallsyms文件是在内核启动后生成的，位于文件系统的/proc目录下，实现代码见kernel/kallsyms.c。前提是内核必须打开CONFIG_KALLSYMS编译选项，这一点我已经在<a href=https://blog.csdn.net/m0_47799526/article/details/106203411 rel=noopener>linux内核vmlinux的编译过程之 — $(kallsyms.o)详解（九）</a>中有讲到。<font color=#0000cc><strong>注意：它和System.map的区别在于它同时包含了内核模块的符号列表。此外内核启动后的/proc/kallsyms文件中的符号表只是给用户态开放了一个可以操作的接口，非人为特意操作，内核一般不会使用它们。</strong></font>。</p> 
+<p>通常情况下我们只需要_stext ~ _etext 和 _sinittext ~ _einittext之间的符号，如果需要将nm命令获得的所有符号都记录下来，则需要开启内核的CONFIG_KALLSYMS_ALL编译选项。</p> 
+<p><font color=black size=4><strong>二. 内核符号表</strong></font><br> 内核在执行过程中，可能需要获得一个地址所在的函数名。比如发生Oops的时候，比如在输出某些调试信息的时候 - - - 使用dump_stack()函数打印栈回溯信息等。</p> 
+<p><font color=#FF0000><strong>但是内核在查找一个地址对应的函数名时，并没有没有求助于上述两个文件，而是在编译内核时，向vmlinux嵌入了一个符号表（.tmp_vmlinux2.o），这样做可能是为了方便快速的查找且避免文件操作带来的不良影响。</strong></font></p> 
+<p><font color=black size=3><strong>2.1 内核符号表的结构（重难点）</strong></font><br> 内嵌的符号表是通过内核目录下的scripts/kallsyms工具生成的，工具的源码为相同目录下的kallsyms.c。具体的生成过程请移步到<a href=https://blog.csdn.net/m0_47799526/article/details/106203411 rel=noopener>linux内核vmlinux的编译过程之 — $(kallsyms.o)详解（九）</a>。汇编文件 .tmp_kallsyms2.S中包含了6个全局变量：</p> 
+<p><strong>1. kallsyms_addresses 数组</strong><br> 数组记录了所有内核符号的地址（已经按顺序排列好），v2.6.0 中相同的地址在kallsyms_addresses中只允许出现一次，到后面的版本例如相同的地址可以出现多次，这样就允许同地址函数名的出现。<br> 例如：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>.globl kallsyms_addresses<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>	ALGN<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>kallsyms_addresses:<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	PTR	_text - <span class=hljs-number>0x15ffc4</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9>	PTR	_text - <span class=hljs-number>0x15fed8</span></table></code></pre> 
+<p>当查找某个地址时所在的函数时，v2.6.0 采用的是线性法，从头到尾地找，很低效，后来改成了二分法查找，提高了查找的效率。</p> 
+<p><strong>2. kallsyms_num_syms</strong><br> 统计了内核中所有符号的数量。</p> 
+<p><strong>3. kallsyms_names数组</strong><br> 也是一个数组，存放所有符号的名称，和kallsyms_addresses 一 一对应。并且使用了偏移索引和高频字符串压缩的方式(后面会进行相应的讲解)。格式如下：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>.byte len ascii字符 ascii字符 ...（len个ascii字符）</table></code></pre> 
+<p>例如：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>.globl kallsyms_names<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>	ALGN<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>kallsyms_names:<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>	.byte <span class=hljs-number>0x04</span>, <span class=hljs-number>0xcd</span>, <span class=hljs-number>0xbc</span>, <span class=hljs-number>0x78</span>, <span class=hljs-number>0x74</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>	.byte <span class=hljs-number>0x06</span>, <span class=hljs-number>0x54</span>, <span class=hljs-number>0xfd</span>, <span class=hljs-number>0xc7</span>, <span class=hljs-number>0xbc</span>, <span class=hljs-number>0x78</span>, <span class=hljs-number>0x74</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>	.byte <span class=hljs-number>0x05</span>, <span class=hljs-number>0x54</span>, <span class=hljs-number>0xfd</span>, <span class=hljs-number>0xbc</span>, <span class=hljs-number>0x78</span>, <span class=hljs-number>0x74</span></table></code></pre> 
+<p><strong>4. kallsyms_token_table和kallsyms_token_index</strong><br> kallsyms_addresses、kallsyms_num_syms和kallsyms_names在前面已经讲过，实际上他们已经可以提供一个[地址 : 符号]的映射关系了，但是内核中几万个符号这样一条一条的存起来会占用大量的空间，所以内核采用一种压缩算法，将所有符号中出现频率较高的字符串记录成一个个的token，然后将原来的符号中和token匹配的子串进行压缩，这样可以实现使用一个字符来代替n个字符，以减小符号存储长度。</p> 
+<p>因此符号表维护了一个kallsyms_token_table，他有256个元素，对应一个字节的长度。由于符号名的只能出现下划线、数字和字母，那在kallsyms_token_table[256]数组中，除了这些字符的ASCII码对应的位置，还有很多未被使用的位置就可以用来存储压缩串。kallsyms_token_table表的内容如下所示：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>.globl kallsyms_token_table<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>	ALGN<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>kallsyms_token_table:<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>	.asciz	<span class=hljs-string>"param"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>	.asciz	<span class=hljs-string>"ion"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>	.asciz	<span class=hljs-string>"T__"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7>	.asciz	<span class=hljs-string>"ino"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	.asciz	<span class=hljs-string>"for"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9>	.asciz	<span class=hljs-string>"lock_"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=10><div class=hljs-ln-n data-line-number=10></div><td class="hljs-ln-line hljs-ln-code" data-line-number=10>	.asciz	<span class=hljs-string>"tab___"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=11><div class=hljs-ln-n data-line-number=11></div><td class="hljs-ln-line hljs-ln-code" data-line-number=11>	.asciz	<span class=hljs-string>"ack"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=12><div class=hljs-ln-n data-line-number=12></div><td class="hljs-ln-line hljs-ln-code" data-line-number=12>	.asciz	<span class=hljs-string>"t__func__.1"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=13><div class=hljs-ln-n data-line-number=13></div><td class="hljs-ln-line hljs-ln-code" data-line-number=13>	.asciz	<span class=hljs-string>"write"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=14><div class=hljs-ln-n data-line-number=14></div><td class="hljs-ln-line hljs-ln-code" data-line-number=14>	...<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=15><div class=hljs-ln-n data-line-number=15></div><td class="hljs-ln-line hljs-ln-code" data-line-number=15>	.asciz	<span class=hljs-string>"a"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=16><div class=hljs-ln-n data-line-number=16></div><td class="hljs-ln-line hljs-ln-code" data-line-number=16>	.asciz	<span class=hljs-string>"b"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=17><div class=hljs-ln-n data-line-number=17></div><td class="hljs-ln-line hljs-ln-code" data-line-number=17>	.asciz	<span class=hljs-string>"c"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=18><div class=hljs-ln-n data-line-number=18></div><td class="hljs-ln-line hljs-ln-code" data-line-number=18>	.asciz	<span class=hljs-string>"d"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=19><div class=hljs-ln-n data-line-number=19></div><td class="hljs-ln-line hljs-ln-code" data-line-number=19>	.asciz	<span class=hljs-string>"e"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=20><div class=hljs-ln-n data-line-number=20></div><td class="hljs-ln-line hljs-ln-code" data-line-number=20>	.asciz	<span class=hljs-string>"f"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=21><div class=hljs-ln-n data-line-number=21></div><td class="hljs-ln-line hljs-ln-code" data-line-number=21>	.asciz	<span class=hljs-string>"g"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=22><div class=hljs-ln-n data-line-number=22></div><td class="hljs-ln-line hljs-ln-code" data-line-number=22>	.asciz	<span class=hljs-string>"h"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=23><div class=hljs-ln-n data-line-number=23></div><td class="hljs-ln-line hljs-ln-code" data-line-number=23>	.asciz	<span class=hljs-string>"i"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=24><div class=hljs-ln-n data-line-number=24></div><td class="hljs-ln-line hljs-ln-code" data-line-number=24>	.asciz	<span class=hljs-string>"j"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=25><div class=hljs-ln-n data-line-number=25></div><td class="hljs-ln-line hljs-ln-code" data-line-number=25>	.asciz	<span class=hljs-string>"k"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=26><div class=hljs-ln-n data-line-number=26></div><td class="hljs-ln-line hljs-ln-code" data-line-number=26>	.asciz	<span class=hljs-string>"l"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=27><div class=hljs-ln-n data-line-number=27></div><td class="hljs-ln-line hljs-ln-code" data-line-number=27>	.asciz	<span class=hljs-string>"m"</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=28><div class=hljs-ln-n data-line-number=28></div><td class="hljs-ln-line hljs-ln-code" data-line-number=28>	...</table></code></pre> 
+<p>那我们在表示一个符号名称时，就可以用0x00来表示“param”，用0x09来表示“write”等。没有被压缩的如0x61仍然表示“a” (不同的配置和内核源码会有一定的区别)。kallsyms_token_index记录每个token首字符在kallsyms_token_table中的偏移值(以字节为单位)。同token table共256条。kallsyms_token_index表的内容如下所示：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>.globl kallsyms_token_index<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>	ALGN<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>kallsyms_token_index:<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>	.<span class=hljs-type>short</span>	<span class=hljs-number>0</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>	.<span class=hljs-type>short</span>	<span class=hljs-number>6</span>       <span class=hljs-comment>//l例如"ion"偏移了字符串"param"大小的字节 </span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>	.<span class=hljs-type>short</span>	<span class=hljs-number>10</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7>	.<span class=hljs-type>short</span>	<span class=hljs-number>14</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	.<span class=hljs-type>short</span>	<span class=hljs-number>18</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9>	.<span class=hljs-type>short</span>	<span class=hljs-number>22</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=10><div class=hljs-ln-n data-line-number=10></div><td class="hljs-ln-line hljs-ln-code" data-line-number=10>	.<span class=hljs-type>short</span>	<span class=hljs-number>28</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=11><div class=hljs-ln-n data-line-number=11></div><td class="hljs-ln-line hljs-ln-code" data-line-number=11>	.<span class=hljs-type>short</span>	<span class=hljs-number>35</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=12><div class=hljs-ln-n data-line-number=12></div><td class="hljs-ln-line hljs-ln-code" data-line-number=12>	.<span class=hljs-type>short</span>	<span class=hljs-number>39</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=13><div class=hljs-ln-n data-line-number=13></div><td class="hljs-ln-line hljs-ln-code" data-line-number=13>	.<span class=hljs-type>short</span>	<span class=hljs-number>51</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=14><div class=hljs-ln-n data-line-number=14></div><td class="hljs-ln-line hljs-ln-code" data-line-number=14>	...</table></code></pre> 
+<p>至于kallsyms_token_table表是如何生成的，可以阅读scripts/kallsyms.c的实现，大致就是将所有符号出现的相邻的两个字符出现的次数都记录起来，例如对于“nf_nat_nf_init”，就记录下“nf”、“f_”、“<em>n”、“na”、……，每两个字符组合出现的次数记录在token_profit[0x10000]数组中（两个字符一组，共有2^8 * 2^8 = 0x10000中可能组合），然后挑选出现次数最多的一个组合形成一个token，比如用“g”来表示“nf”，那“nf_nat_nf_init”就被改为“g_nat_g_init”。接下来，再在修改后的所有符号中计算每两个字符的出现次数来挑选出现次数最多的组合，例如用“J”来表示“g</em>”，那“g_nat_g_init”又被改为“Jnat_Jinit”。直到生成最终的token表。</p> 
+<p><strong>5. kallsyms_markers</strong><br> 把符号名每256个分一组，用一个数组kallsyms_markers记录这些组在kallsyms_names中的偏移量，这样查找就方便多了，不必从头来。</p> 
+<p><font color=black size=3><strong>2.2 内核符号的查找过程</strong></font></p> 
+<p><strong>1. 举例分析</strong><br> 先不讲函数实现，只是用一个例子来说明内核符号的查找过程。比如我在内核中想打印出0xc0008128 地址所在的符号名。</p> 
+<p>（1）首先不关注内核怎么做，我们可以先在System.map文件中(注意：System.map和内核启动后的/proc/kallsyms文件中的符号表只是给我们看的，内核不会使用它们)看到这个地址位于为__create_page_tables和__enable_mmu两个符号之间。</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>c0168000 T _text<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>...<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>c000803c t __create_page_tables<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>c0008128 t __enable_mmu_loc<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>c0008134 t __enable_mmu<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>...</table></code></pre> 
+<p>（2）在由script/kallsyms工具生成的.tmp_kallsyms2.S文件中，kallsyms_addresses数组存放着所有符号的地址，并且是按照地址升序排列的，所以通过二分查找可以定位到0xc0008128 所在符号的起始地址是下面的这个条目：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>kallsyms_addresses:<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>	PTR	_text - <span class=hljs-number>0x160000</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>	PTR	_text - <span class=hljs-number>0x15ffc4</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7>	PTR	_text - <span class=hljs-number>0x15fed8</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	PTR	_text - <span class=hljs-number>0x15fed8</span>    <span class=hljs-comment>//0xc0168000  - 0x15fed8  = 0xc0008128 </span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9>	...</table></code></pre> 
+<p>（3）而这一项在kallsyms_addresses中的索引值index为<strong>6</strong>，所以现在需要找到kallsyms_names中的第<strong>6</strong>个符号。我们这时实际上可以在kallsyms_names进行查找了，怎么找呢？我们先看一下kallsyms_names大致的样子：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>kallsyms_names:<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>	.byte <span class=hljs-number>0x04</span>, <span class=hljs-number>0xcd</span>, <span class=hljs-number>0xbc</span>, <span class=hljs-number>0x78</span>, <span class=hljs-number>0x74</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>	.byte <span class=hljs-number>0x06</span>, <span class=hljs-number>0x54</span>, <span class=hljs-number>0xfd</span>, <span class=hljs-number>0xc7</span>, <span class=hljs-number>0xbc</span>, <span class=hljs-number>0x78</span>, <span class=hljs-number>0x74</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>	.byte <span class=hljs-number>0x05</span>, <span class=hljs-number>0x54</span>, <span class=hljs-number>0xfd</span>, <span class=hljs-number>0xbc</span>, <span class=hljs-number>0x78</span>, <span class=hljs-number>0x74</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>	.byte <span class=hljs-number>0x06</span>, <span class=hljs-number>0x02</span>, <span class=hljs-number>0x19</span>, <span class=hljs-number>0x62</span>, <span class=hljs-number>0x65</span>, <span class=hljs-number>0x67</span>, <span class=hljs-number>0xf5</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>	.byte <span class=hljs-number>0x0a</span>, <span class=hljs-number>0xdb</span>, <span class=hljs-number>0x63</span>, <span class=hljs-number>0xf6</span>, <span class=hljs-number>0x21</span>, <span class=hljs-number>0xde</span>, <span class=hljs-number>0x67</span>, <span class=hljs-number>0xf3</span>, <span class=hljs-number>0xfb</span>, <span class=hljs-number>0xdf</span>, <span class=hljs-number>0x73</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7>	.byte <span class=hljs-number>0x0a</span>, <span class=hljs-number>0xdb</span>, <span class=hljs-number>0xdc</span>, <span class=hljs-number>0x61</span>, <span class=hljs-number>0x62</span>, <span class=hljs-number>0xa5</span>, <span class=hljs-number>0x2a</span>, <span class=hljs-number>0x75</span>, <span class=hljs-number>0x5f</span>, <span class=hljs-number>0xeb</span>, <span class=hljs-number>0x63</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	.byte <span class=hljs-number>0x07</span>, <span class=hljs-number>0xdb</span>, <span class=hljs-number>0xdc</span>, <span class=hljs-number>0x61</span>, <span class=hljs-number>0x62</span>, <span class=hljs-number>0xa5</span>, <span class=hljs-number>0x2a</span>, <span class=hljs-number>0x75</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9>	.byte <span class=hljs-number>0x0a</span>, <span class=hljs-number>0xdb</span>, <span class=hljs-number>0x74</span>, <span class=hljs-number>0x75</span>, <span class=hljs-number>0x72</span>, <span class=hljs-number>0x6e</span>, <span class=hljs-number>0x5f</span>, <span class=hljs-number>0x2a</span>, <span class=hljs-number>0x75</span>, <span class=hljs-number>0x5f</span>, <span class=hljs-number>0xdd</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=10><div class=hljs-ln-n data-line-number=10></div><td class="hljs-ln-line hljs-ln-code" data-line-number=10>	...</table></code></pre> 
+<p>其中每一行存储一个压缩后的符号，而index和kallsyms_addresses中的index是一一对应的。每一行的内容分为两部分：第一个byte指明符号的长度，后续才是符号自身。虽然我们这里看到的符号是一行一行分开的，但实际上kallsyms_names是一个unsigned char的数组，所以想要找第<strong>6</strong>个符号，只能这样来找：</p> 
+<ul><li>从第一个字节开始，获得第一个符号的长度len；<li>向后移len+1个字节，就达到第二个符号的长度字节，这时记录下已经走过的总长度；<li>重复前两步的动作，直到走过的总长度为6。</ul> 
+<p>这样找的话，要找到kallsyms_names的第<strong>6</strong>个符号就要移动<strong>6</strong>次，这个移动量意识还可以接受。但是如果要寻找最后一个符号，就要移动更多次，时间耗费较多，所以内核通过一个kallsyms_markers数组进行查找。</p> 
+<p>将kallsyms_names每256个符号分为一组，每一组的第一个字符的位置记录在kallsyms_markers中，这样，我们在找kallsyms_names中的某个条目时，可以快速定义到它位于那个组，然后再在组内寻找，组内移动次数最多为255次。</p> 
+<p>所以我们先通过(6 &gt;&gt; 8)得到了要找的符号位于第0组，我们看到kallsyms_markers的第0项为：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>kallsyms_markers:<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>	PTR	<span class=hljs-number>0</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>	PTR	<span class=hljs-number>2679</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>	PTR	<span class=hljs-number>5202</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>    ...</table></code></pre> 
+<p>这个值指明了kallsyms_names中第0组的起始字符的偏移，所以我们直接找到kallsyms_names[0]位置，即是第0组所有符号的第一个字节。同时我们可以通过(6 &amp;&amp; 0xFF)得到要找的符号在第0组组内的序号为6，即第97个符号。</p> 
+<p>接下来寻找第<strong>6</strong>个符号就只能通过上面讲到的方法了。</p> 
+<p>通过上面一系列的查找，我们定位到第0组中第6个符号如下：</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1>.byte <span class=hljs-number>0x07</span>, <span class=hljs-number>0xdb</span>, <span class=hljs-number>0xdc</span>, <span class=hljs-number>0x61</span>, <span class=hljs-number>0x62</span>, <span class=hljs-number>0xa5</span>, <span class=hljs-number>0x2a</span>, <span class=hljs-number>0x75</span></table></code></pre> 
+<p>这个是压缩后的符号，第一个字节0x07是符号长度，所以我们接下来的任务就剩下解压了。</p> 
+<p>每个字节解压后对应的字符串在kallsyms_token_table中可以找到。</p> 
+<p>于是在kallsyms_token_table表中寻找第219(0xdb)项、第220(0xdc)项、第97(0x61)项、第98(0x62)项、第165(0xa5)项、第42(0x2a)项、第117(0x75)项，得到的结果分别为：</p> 
+<p>“t__”， “en”， “a”，“b”， “le_”，“mm”， “u”</p> 
+<p>由于在压缩的时候将符号类型“t”也压进去了，所以要去掉第一个字符，至此就获得了0xc0008128 地址所在的函数为__enable_mmu 。</p> 
+<p><strong>2. 源码分析</strong><br> 下面我们来具体分析内核源码的实现（linux-2.6.38）<br> 内核根据2.1提到的六个全局常量来查找一个地址对应的符号名，实现函数为kernel/kallsyms.c中的kallsyms_lookup()。</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1><span class=hljs-comment><span class=hljs-comment>/*</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2><span class=hljs-comment> * Lookup an address</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3><span class=hljs-comment> * - modname is set to NULL if it's in the kernel.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4><span class=hljs-comment> * - We guarantee that the returned name is valid until we reschedule even if.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5><span class=hljs-comment> *   It resides in a module.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6><span class=hljs-comment> * - We also guarantee that modname will be valid until rescheduled.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7><span class=hljs-comment> * addr       ：符号的地址（链接后的虚拟地址）</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8><span class=hljs-comment> * symbolsize ：存放符号的大小</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9><span class=hljs-comment> *  offset    ：存放所需查找的地址和小于该地址的符号表地址之间的差值.(前提条件是该地址在符号表中不存在,如果存在则为0)</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=10><div class=hljs-ln-n data-line-number=10></div><td class="hljs-ln-line hljs-ln-code" data-line-number=10><span class=hljs-comment> *  modname   ：???</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=11><div class=hljs-ln-n data-line-number=11></div><td class="hljs-ln-line hljs-ln-code" data-line-number=11><span class=hljs-comment> *  namebuf   ：查找到的字符</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=12><div class=hljs-ln-n data-line-number=12></div><td class="hljs-ln-line hljs-ln-code" data-line-number=12><span class=hljs-comment> */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=13><div class=hljs-ln-n data-line-number=13></div><td class="hljs-ln-line hljs-ln-code" data-line-number=13><span class=hljs-type>const</span> <span class=hljs-type>char</span> *<span class="hljs-title function_">kallsyms_lookup</span><span class=hljs-params>(<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> addr,</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=14><div class=hljs-ln-n data-line-number=14></div><td class="hljs-ln-line hljs-ln-code" data-line-number=14>			    <span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> *symbolsize,<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=15><div class=hljs-ln-n data-line-number=15></div><td class="hljs-ln-line hljs-ln-code" data-line-number=15>			    <span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> *offset,<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=16><div class=hljs-ln-n data-line-number=16></div><td class="hljs-ln-line hljs-ln-code" data-line-number=16>			    <span class=hljs-type>char</span> **modname, <span class=hljs-type>char</span> *namebuf)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=17><div class=hljs-ln-n data-line-number=17></div><td class="hljs-ln-line hljs-ln-code" data-line-number=17>{<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=18><div class=hljs-ln-n data-line-number=18></div><td class="hljs-ln-line hljs-ln-code" data-line-number=18>	namebuf[KSYM_NAME_LEN - <span class=hljs-number>1</span>] = <span class=hljs-number>0</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=19><div class=hljs-ln-n data-line-number=19></div><td class="hljs-ln-line hljs-ln-code" data-line-number=19>	namebuf[<span class=hljs-number>0</span>] = <span class=hljs-number>0</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=20><div class=hljs-ln-n data-line-number=20></div><td class="hljs-ln-line hljs-ln-code" data-line-number=20> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=21><div class=hljs-ln-n data-line-number=21></div><td class="hljs-ln-line hljs-ln-code" data-line-number=21><span class=hljs-comment>/* 判断符号的地址是不是在 _stext —— _end之间，如果不是返回0*/</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=22><div class=hljs-ln-n data-line-number=22></div><td class="hljs-ln-line hljs-ln-code" data-line-number=22>	<span class=hljs-keyword>if</span> (is_ksym_addr(addr)) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=23><div class=hljs-ln-n data-line-number=23></div><td class="hljs-ln-line hljs-ln-code" data-line-number=23>		<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> pos;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=24><div class=hljs-ln-n data-line-number=24></div><td class="hljs-ln-line hljs-ln-code" data-line-number=24>		<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=25><div class=hljs-ln-n data-line-number=25></div><td class="hljs-ln-line hljs-ln-code" data-line-number=25>		<span class=hljs-comment>/* 通过对get_symbol_pos函数的分析，pos代表找到匹配的地址在地址表中kallsym_addresses数组中的索引*/</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=26><div class=hljs-ln-n data-line-number=26></div><td class="hljs-ln-line hljs-ln-code" data-line-number=26>		pos = get_symbol_pos(addr, symbolsize, offset);<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=27><div class=hljs-ln-n data-line-number=27></div><td class="hljs-ln-line hljs-ln-code" data-line-number=27>		<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=28><div class=hljs-ln-n data-line-number=28></div><td class="hljs-ln-line hljs-ln-code" data-line-number=28>		<span class=hljs-comment>/* Grab name 该函数调用完成之后，符号的名称就存放在了namebuf中，并且返回，符号解析结束了*/</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=29><div class=hljs-ln-n data-line-number=29></div><td class="hljs-ln-line hljs-ln-code" data-line-number=29>		kallsyms_expand_symbol(get_symbol_offset(pos), namebuf);<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=30><div class=hljs-ln-n data-line-number=30></div><td class="hljs-ln-line hljs-ln-code" data-line-number=30>		<span class=hljs-keyword>if</span> (modname)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=31><div class=hljs-ln-n data-line-number=31></div><td class="hljs-ln-line hljs-ln-code" data-line-number=31>			*modname = <span class=hljs-literal>NULL</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=32><div class=hljs-ln-n data-line-number=32></div><td class="hljs-ln-line hljs-ln-code" data-line-number=32>		<span class=hljs-keyword>return</span> namebuf;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=33><div class=hljs-ln-n data-line-number=33></div><td class="hljs-ln-line hljs-ln-code" data-line-number=33>	}<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=34><div class=hljs-ln-n data-line-number=34></div><td class="hljs-ln-line hljs-ln-code" data-line-number=34> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=35><div class=hljs-ln-n data-line-number=35></div><td class="hljs-ln-line hljs-ln-code" data-line-number=35>	<span class=hljs-comment>/* See if it's in a module. */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=36><div class=hljs-ln-n data-line-number=36></div><td class="hljs-ln-line hljs-ln-code" data-line-number=36>	<span class=hljs-keyword>return</span> module_address_lookup(addr, symbolsize, offset, modname,<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=37><div class=hljs-ln-n data-line-number=37></div><td class="hljs-ln-line hljs-ln-code" data-line-number=37>				     namebuf);<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=38><div class=hljs-ln-n data-line-number=38></div><td class="hljs-ln-line hljs-ln-code" data-line-number=38>}</table></code></pre> 
+<p><strong>下面对里面涉及的子函数进行详细的说明：</strong><br> (1) 获取符号地址在符号地址表kallsym_addresses数组中的索引。<font color=#0000cc><strong>注意这是个索引(即第多少个符号)，而非偏移量。</strong></font></p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1><span class=hljs-type>static</span> <span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> <span class="hljs-title function_">get_symbol_pos</span><span class=hljs-params>(<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> addr,</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2>				    <span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> *symbolsize,<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3>				    <span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> *offset)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4>{<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5>	<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> symbol_start = <span class=hljs-number>0</span>, symbol_end = <span class=hljs-number>0</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>	<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> i, low, high, mid;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	<span class=hljs-comment>/* This kernel should never had been booted. */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9>	BUG_ON(!kallsyms_addresses);<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=10><div class=hljs-ln-n data-line-number=10></div><td class="hljs-ln-line hljs-ln-code" data-line-number=10> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=11><div class=hljs-ln-n data-line-number=11></div><td class="hljs-ln-line hljs-ln-code" data-line-number=11>	<span class=hljs-comment>/* Do a binary search on the sorted kallsyms_addresses array. */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=12><div class=hljs-ln-n data-line-number=12></div><td class="hljs-ln-line hljs-ln-code" data-line-number=12>	low = <span class=hljs-number>0</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=13><div class=hljs-ln-n data-line-number=13></div><td class="hljs-ln-line hljs-ln-code" data-line-number=13>	high = kallsyms_num_syms;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=14><div class=hljs-ln-n data-line-number=14></div><td class="hljs-ln-line hljs-ln-code" data-line-number=14> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=15><div class=hljs-ln-n data-line-number=15></div><td class="hljs-ln-line hljs-ln-code" data-line-number=15>	<span class=hljs-comment>/* 从这里我们看到：对符号的查询是由的是折半查找的方式 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=16><div class=hljs-ln-n data-line-number=16></div><td class="hljs-ln-line hljs-ln-code" data-line-number=16>	<span class=hljs-keyword>while</span> (high - low &gt; <span class=hljs-number>1</span>) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=17><div class=hljs-ln-n data-line-number=17></div><td class="hljs-ln-line hljs-ln-code" data-line-number=17>		mid = low + (high - low) / <span class=hljs-number>2</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=18><div class=hljs-ln-n data-line-number=18></div><td class="hljs-ln-line hljs-ln-code" data-line-number=18>		<span class=hljs-keyword>if</span> (kallsyms_addresses[mid] &lt;= addr)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=19><div class=hljs-ln-n data-line-number=19></div><td class="hljs-ln-line hljs-ln-code" data-line-number=19>			low = mid;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=20><div class=hljs-ln-n data-line-number=20></div><td class="hljs-ln-line hljs-ln-code" data-line-number=20>		<span class=hljs-keyword>else</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=21><div class=hljs-ln-n data-line-number=21></div><td class="hljs-ln-line hljs-ln-code" data-line-number=21>			high = mid;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=22><div class=hljs-ln-n data-line-number=22></div><td class="hljs-ln-line hljs-ln-code" data-line-number=22>	}<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=23><div class=hljs-ln-n data-line-number=23></div><td class="hljs-ln-line hljs-ln-code" data-line-number=23> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=24><div class=hljs-ln-n data-line-number=24></div><td class="hljs-ln-line hljs-ln-code" data-line-number=24>	<span class=hljs-comment><span class=hljs-comment>/* 对重复地址所做的工作</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=25><div class=hljs-ln-n data-line-number=25></div><td class="hljs-ln-line hljs-ln-code" data-line-number=25><span class=hljs-comment>	 * Search for the first aliased symbol. Aliased</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=26><div class=hljs-ln-n data-line-number=26></div><td class="hljs-ln-line hljs-ln-code" data-line-number=26><span class=hljs-comment>	 * symbols are symbols with the same address.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=27><div class=hljs-ln-n data-line-number=27></div><td class="hljs-ln-line hljs-ln-code" data-line-number=27><span class=hljs-comment>	 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=28><div class=hljs-ln-n data-line-number=28></div><td class="hljs-ln-line hljs-ln-code" data-line-number=28>	<span class=hljs-keyword>while</span> (low &amp;&amp; kallsyms_addresses[low<span class=hljs-number>-1</span>] == kallsyms_addresses[low])<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=29><div class=hljs-ln-n data-line-number=29></div><td class="hljs-ln-line hljs-ln-code" data-line-number=29>		--low;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=30><div class=hljs-ln-n data-line-number=30></div><td class="hljs-ln-line hljs-ln-code" data-line-number=30> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=31><div class=hljs-ln-n data-line-number=31></div><td class="hljs-ln-line hljs-ln-code" data-line-number=31>	symbol_start = kallsyms_addresses[low];<span class=hljs-comment>/* 得到符号的起始地址 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=32><div class=hljs-ln-n data-line-number=32></div><td class="hljs-ln-line hljs-ln-code" data-line-number=32>	<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=33><div class=hljs-ln-n data-line-number=33></div><td class="hljs-ln-line hljs-ln-code" data-line-number=33>	<span class=hljs-comment>/* Search for next non-aliased symbol. */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=34><div class=hljs-ln-n data-line-number=34></div><td class="hljs-ln-line hljs-ln-code" data-line-number=34>	<span class=hljs-keyword>for</span> (i = low + <span class=hljs-number>1</span>; i &lt; kallsyms_num_syms; i++) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=35><div class=hljs-ln-n data-line-number=35></div><td class="hljs-ln-line hljs-ln-code" data-line-number=35>		<span class=hljs-keyword>if</span> (kallsyms_addresses[i] &gt; symbol_start) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=36><div class=hljs-ln-n data-line-number=36></div><td class="hljs-ln-line hljs-ln-code" data-line-number=36>			symbol_end = kallsyms_addresses[i]; <span class=hljs-comment>/* 得到符号的结束地址，即下一个符号的起始地址 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=37><div class=hljs-ln-n data-line-number=37></div><td class="hljs-ln-line hljs-ln-code" data-line-number=37>			<span class=hljs-keyword>break</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=38><div class=hljs-ln-n data-line-number=38></div><td class="hljs-ln-line hljs-ln-code" data-line-number=38>		}<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=39><div class=hljs-ln-n data-line-number=39></div><td class="hljs-ln-line hljs-ln-code" data-line-number=39>	}<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=40><div class=hljs-ln-n data-line-number=40></div><td class="hljs-ln-line hljs-ln-code" data-line-number=40> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=41><div class=hljs-ln-n data-line-number=41></div><td class="hljs-ln-line hljs-ln-code" data-line-number=41>	<span class=hljs-comment>/* If we found no next symbol, we use the end of the section. */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=42><div class=hljs-ln-n data-line-number=42></div><td class="hljs-ln-line hljs-ln-code" data-line-number=42>	<span class=hljs-keyword>if</span> (!symbol_end) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=43><div class=hljs-ln-n data-line-number=43></div><td class="hljs-ln-line hljs-ln-code" data-line-number=43>		<span class=hljs-keyword>if</span> (is_kernel_inittext(addr))<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=44><div class=hljs-ln-n data-line-number=44></div><td class="hljs-ln-line hljs-ln-code" data-line-number=44>			symbol_end = (<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span>)_einittext;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=45><div class=hljs-ln-n data-line-number=45></div><td class="hljs-ln-line hljs-ln-code" data-line-number=45>		<span class=hljs-keyword>else</span> <span class=hljs-keyword>if</span> (all_var)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=46><div class=hljs-ln-n data-line-number=46></div><td class="hljs-ln-line hljs-ln-code" data-line-number=46>			symbol_end = (<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span>)_end;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=47><div class=hljs-ln-n data-line-number=47></div><td class="hljs-ln-line hljs-ln-code" data-line-number=47>		<span class=hljs-keyword>else</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=48><div class=hljs-ln-n data-line-number=48></div><td class="hljs-ln-line hljs-ln-code" data-line-number=48>			symbol_end = (<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span>)_etext;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=49><div class=hljs-ln-n data-line-number=49></div><td class="hljs-ln-line hljs-ln-code" data-line-number=49>	}<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=50><div class=hljs-ln-n data-line-number=50></div><td class="hljs-ln-line hljs-ln-code" data-line-number=50> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=51><div class=hljs-ln-n data-line-number=51></div><td class="hljs-ln-line hljs-ln-code" data-line-number=51>	<span class=hljs-keyword>if</span> (symbolsize)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=52><div class=hljs-ln-n data-line-number=52></div><td class="hljs-ln-line hljs-ln-code" data-line-number=52>		*symbolsize = symbol_end - symbol_start; <span class=hljs-comment>/* 得到符号的大小 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=53><div class=hljs-ln-n data-line-number=53></div><td class="hljs-ln-line hljs-ln-code" data-line-number=53>	<span class=hljs-keyword>if</span> (offset)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=54><div class=hljs-ln-n data-line-number=54></div><td class="hljs-ln-line hljs-ln-code" data-line-number=54> <span class=hljs-comment>/* offset的含义就是我们所需查找的地址和小于该地址的符号表地址之间的差值。（前提条件是该地址在符号表中不存在,如果存在则为0）*/</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=55><div class=hljs-ln-n data-line-number=55></div><td class="hljs-ln-line hljs-ln-code" data-line-number=55>       offset = addr - symbol_start; <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=56><div class=hljs-ln-n data-line-number=56></div><td class="hljs-ln-line hljs-ln-code" data-line-number=56>       <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=57><div class=hljs-ln-n data-line-number=57></div><td class="hljs-ln-line hljs-ln-code" data-line-number=57><span class=hljs-comment>/* 返回的地址代表符号在符号地址表kallsym_addresses数组中的索引 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=58><div class=hljs-ln-n data-line-number=58></div><td class="hljs-ln-line hljs-ln-code" data-line-number=58>	<span class=hljs-keyword>return</span> low;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=59><div class=hljs-ln-n data-line-number=59></div><td class="hljs-ln-line hljs-ln-code" data-line-number=59>}</table></code></pre> 
+<p>(2 得到符号索引值pos后，就继续来查找符号相对kallsyms_names的偏移量。<font color=#0000cc><strong>注意偏移量是以字节为单位的</strong></font></p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1><span class=hljs-comment><span class=hljs-comment>/* </span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2><span class=hljs-comment> * Find the offset on the compressed stream given and index in the</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3><span class=hljs-comment> * kallsyms array.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4><span class=hljs-comment> * pos ：在kallsyms_address中的索引。第xxx个符号，pos =xxx</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5><span class=hljs-comment> */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6><span class=hljs-type>static</span> <span class=hljs-type>unsigned</span> <span class=hljs-type>int</span> <span class="hljs-title function_">get_symbol_offset</span><span class=hljs-params>(<span class=hljs-type>unsigned</span> <span class=hljs-type>long</span> pos)</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7>{<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	<span class=hljs-type>const</span> u8 *name;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9>	<span class=hljs-type>int</span> i;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=10><div class=hljs-ln-n data-line-number=10></div><td class="hljs-ln-line hljs-ln-code" data-line-number=10> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=11><div class=hljs-ln-n data-line-number=11></div><td class="hljs-ln-line hljs-ln-code" data-line-number=11>	<span class=hljs-comment><span class=hljs-comment>/* linux内核为了便于查询，将kallsyms_names将符号每256个分为一组</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=12><div class=hljs-ln-n data-line-number=12></div><td class="hljs-ln-line hljs-ln-code" data-line-number=12><span class=hljs-comment>	 * Use the closest marker we have. We have markers every 256 positions,</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=13><div class=hljs-ln-n data-line-number=13></div><td class="hljs-ln-line hljs-ln-code" data-line-number=13><span class=hljs-comment>	 * so that should be close enough.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=14><div class=hljs-ln-n data-line-number=14></div><td class="hljs-ln-line hljs-ln-code" data-line-number=14><span class=hljs-comment>	 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=15><div class=hljs-ln-n data-line-number=15></div><td class="hljs-ln-line hljs-ln-code" data-line-number=15>	name = &amp;kallsyms_names[kallsyms_markers[pos &gt;&gt; <span class=hljs-number>8</span>]];<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=16><div class=hljs-ln-n data-line-number=16></div><td class="hljs-ln-line hljs-ln-code" data-line-number=16> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=17><div class=hljs-ln-n data-line-number=17></div><td class="hljs-ln-line hljs-ln-code" data-line-number=17>	<span class=hljs-comment><span class=hljs-comment>/*</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=18><div class=hljs-ln-n data-line-number=18></div><td class="hljs-ln-line hljs-ln-code" data-line-number=18><span class=hljs-comment>	 * Sequentially scan all the symbols up to the point we're searching</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=19><div class=hljs-ln-n data-line-number=19></div><td class="hljs-ln-line hljs-ln-code" data-line-number=19><span class=hljs-comment>	 * for. Every symbol is stored in a [&lt;len&gt;][&lt;len&gt; bytes of data] format,</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=20><div class=hljs-ln-n data-line-number=20></div><td class="hljs-ln-line hljs-ln-code" data-line-number=20><span class=hljs-comment>	 * so we just need to add the len to the current pointer for every</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=21><div class=hljs-ln-n data-line-number=21></div><td class="hljs-ln-line hljs-ln-code" data-line-number=21><span class=hljs-comment>	 * symbol we wish to skip.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=22><div class=hljs-ln-n data-line-number=22></div><td class="hljs-ln-line hljs-ln-code" data-line-number=22><span class=hljs-comment>	 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=23><div class=hljs-ln-n data-line-number=23></div><td class="hljs-ln-line hljs-ln-code" data-line-number=23>	<span class=hljs-keyword>for</span> (i = <span class=hljs-number>0</span>; i &lt; (pos &amp; <span class=hljs-number>0xFF</span>); i++)<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=24><div class=hljs-ln-n data-line-number=24></div><td class="hljs-ln-line hljs-ln-code" data-line-number=24>		name = name + (*name) + <span class=hljs-number>1</span>;<span class=hljs-comment>/*(*name)是当前符号的长度值 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=25><div class=hljs-ln-n data-line-number=25></div><td class="hljs-ln-line hljs-ln-code" data-line-number=25> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=26><div class=hljs-ln-n data-line-number=26></div><td class="hljs-ln-line hljs-ln-code" data-line-number=26>	<span class=hljs-keyword>return</span> name - kallsyms_names;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=27><div class=hljs-ln-n data-line-number=27></div><td class="hljs-ln-line hljs-ln-code" data-line-number=27>}</table></code></pre> 
+<p>前提：linux内核为了便于查询，将kallsyms_names将符号每256个分为一组。</p> 
+<ul><li>首先，我们通过索引值pos查到该符号所属的组；<li>然后，通过kallsyms_markers数组查询到该组的首个符号在kallsyms_names中的偏移量(以字节为单位)。也就是说，通过name = &amp;kallsyms_names[kallsyms_markers[pos &gt;&gt; 8]];name就指向了该索引值pos所在组的第一个符号的起始字符。—主要为了提高查找效率<li>紧接着，显然pos并不一定就是该组的第一个符号，那么接下来，我们就要从所找到组的第一个符号的起始字符起，开始查找，直到找到索引值pos指向的符号地址为止，这就是for循环干的事情。每个符号由length+1个字节组成，其中第一个字节就是该符号的长度，接下来的length才是符号的内容。for循环所做的工作就是读取每个符号的第一个字符，获取该符号的长度，然后name向后移动*name+1个字节，这样就指向了下一个符号。<li>返回符号相对kallsyms_names的偏移量(字节)。</ul> 
+<p>(3) 得到符号相对kallsyms_names的偏移量(字节)后，就要对符号进行解析了。</p> 
+<pre class=highlighter-hljs highlighted=true><code class="prism language-c highlighter-hljs hljs hljs-line-numbers"><table class=hljs-ln><tbody><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=1><div class=hljs-ln-n data-line-number=1></div><td class="hljs-ln-line hljs-ln-code" data-line-number=1><span class=hljs-comment><span class=hljs-comment>/*</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=2><div class=hljs-ln-n data-line-number=2></div><td class="hljs-ln-line hljs-ln-code" data-line-number=2><span class=hljs-comment> * Expand a compressed symbol data into the resulting uncompressed string,</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=3><div class=hljs-ln-n data-line-number=3></div><td class="hljs-ln-line hljs-ln-code" data-line-number=3><span class=hljs-comment> * given the offset to where the symbol is in the compressed stream.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=4><div class=hljs-ln-n data-line-number=4></div><td class="hljs-ln-line hljs-ln-code" data-line-number=4><span class=hljs-comment> */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=5><div class=hljs-ln-n data-line-number=5></div><td class="hljs-ln-line hljs-ln-code" data-line-number=5><span class=hljs-type>static</span> <span class=hljs-type>unsigned</span> <span class=hljs-type>int</span> <span class="hljs-title function_">kallsyms_expand_symbol</span><span class=hljs-params>(<span class=hljs-type>unsigned</span> <span class=hljs-type>int</span> off, <span class=hljs-type>char</span> *result)</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=6><div class=hljs-ln-n data-line-number=6></div><td class="hljs-ln-line hljs-ln-code" data-line-number=6>{<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=7><div class=hljs-ln-n data-line-number=7></div><td class="hljs-ln-line hljs-ln-code" data-line-number=7>	<span class=hljs-type>int</span> len, skipped_first = <span class=hljs-number>0</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=8><div class=hljs-ln-n data-line-number=8></div><td class="hljs-ln-line hljs-ln-code" data-line-number=8>	<span class=hljs-type>const</span> u8 *tptr, *data;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=9><div class=hljs-ln-n data-line-number=9></div><td class="hljs-ln-line hljs-ln-code" data-line-number=9> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=10><div class=hljs-ln-n data-line-number=10></div><td class="hljs-ln-line hljs-ln-code" data-line-number=10>	<span class=hljs-comment>/* Get the compressed symbol length from the first symbol byte. */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=11><div class=hljs-ln-n data-line-number=11></div><td class="hljs-ln-line hljs-ln-code" data-line-number=11>	data = &amp;kallsyms_names[off];<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=12><div class=hljs-ln-n data-line-number=12></div><td class="hljs-ln-line hljs-ln-code" data-line-number=12>	len = *data; <span class=hljs-comment>/* 符号的第一个字符就是符号的长度，在这里赋值给了变量len */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=13><div class=hljs-ln-n data-line-number=13></div><td class="hljs-ln-line hljs-ln-code" data-line-number=13>	data++; <span class=hljs-comment>/* 将data指向了符号的下一个字节，这就是符号真正的内容了 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=14><div class=hljs-ln-n data-line-number=14></div><td class="hljs-ln-line hljs-ln-code" data-line-number=14> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=15><div class=hljs-ln-n data-line-number=15></div><td class="hljs-ln-line hljs-ln-code" data-line-number=15>	<span class=hljs-comment><span class=hljs-comment>/*</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=16><div class=hljs-ln-n data-line-number=16></div><td class="hljs-ln-line hljs-ln-code" data-line-number=16><span class=hljs-comment>	 * Update the offset to return the offset for the next symbol on</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=17><div class=hljs-ln-n data-line-number=17></div><td class="hljs-ln-line hljs-ln-code" data-line-number=17><span class=hljs-comment>	 * the compressed stream.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=18><div class=hljs-ln-n data-line-number=18></div><td class="hljs-ln-line hljs-ln-code" data-line-number=18><span class=hljs-comment>	 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=19><div class=hljs-ln-n data-line-number=19></div><td class="hljs-ln-line hljs-ln-code" data-line-number=19>	off += len + <span class=hljs-number>1</span>; <span class=hljs-comment>/* 符号长度占一个字节 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=20><div class=hljs-ln-n data-line-number=20></div><td class="hljs-ln-line hljs-ln-code" data-line-number=20> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=21><div class=hljs-ln-n data-line-number=21></div><td class="hljs-ln-line hljs-ln-code" data-line-number=21>	<span class=hljs-comment><span class=hljs-comment>/*</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=22><div class=hljs-ln-n data-line-number=22></div><td class="hljs-ln-line hljs-ln-code" data-line-number=22><span class=hljs-comment>	 * For every byte on the compressed symbol data, copy the table</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=23><div class=hljs-ln-n data-line-number=23></div><td class="hljs-ln-line hljs-ln-code" data-line-number=23><span class=hljs-comment>	 * entry for that byte.</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=24><div class=hljs-ln-n data-line-number=24></div><td class="hljs-ln-line hljs-ln-code" data-line-number=24><span class=hljs-comment>	 */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=25><div class=hljs-ln-n data-line-number=25></div><td class="hljs-ln-line hljs-ln-code" data-line-number=25>	<span class=hljs-keyword>while</span> (len) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=26><div class=hljs-ln-n data-line-number=26></div><td class="hljs-ln-line hljs-ln-code" data-line-number=26>	<span class=hljs-comment><span class=hljs-comment>/* 前面我们介绍过，为了提高查询速度，我们将常用的字符串存储在kallsyms_token_table中，kallsyms_token_index记录每个ascii</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=27><div class=hljs-ln-n data-line-number=27></div><td class="hljs-ln-line hljs-ln-code" data-line-number=27><span class=hljs-comment>	字符的替代串在kallsyms_token_table中的偏移值（以字节为单位）*/</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=28><div class=hljs-ln-n data-line-number=28></div><td class="hljs-ln-line hljs-ln-code" data-line-number=28>		tptr = &amp;kallsyms_token_table[kallsyms_token_index[*data]];<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=29><div class=hljs-ln-n data-line-number=29></div><td class="hljs-ln-line hljs-ln-code" data-line-number=29>		data++; <span class=hljs-comment>/* data指向下一个要解析的字节 */</span>。<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=30><div class=hljs-ln-n data-line-number=30></div><td class="hljs-ln-line hljs-ln-code" data-line-number=30>		len--;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=31><div class=hljs-ln-n data-line-number=31></div><td class="hljs-ln-line hljs-ln-code" data-line-number=31> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=32><div class=hljs-ln-n data-line-number=32></div><td class="hljs-ln-line hljs-ln-code" data-line-number=32>		<span class=hljs-keyword>while</span> (*tptr) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=33><div class=hljs-ln-n data-line-number=33></div><td class="hljs-ln-line hljs-ln-code" data-line-number=33>		<span class=hljs-comment><span class=hljs-comment>/* 跳过第一个字符,因为它不是真正的符号的内容,而是符号的类型.将该字符串赋给了result。</span></span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=34><div class=hljs-ln-n data-line-number=34></div><td class="hljs-ln-line hljs-ln-code" data-line-number=34><span class=hljs-comment>		然后依次解析每个数据,这样,result中就存放了符号的名字了*/</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=35><div class=hljs-ln-n data-line-number=35></div><td class="hljs-ln-line hljs-ln-code" data-line-number=35>			<span class=hljs-keyword>if</span> (skipped_first) {<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=36><div class=hljs-ln-n data-line-number=36></div><td class="hljs-ln-line hljs-ln-code" data-line-number=36>				*result = *tptr;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=37><div class=hljs-ln-n data-line-number=37></div><td class="hljs-ln-line hljs-ln-code" data-line-number=37>				result++;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=38><div class=hljs-ln-n data-line-number=38></div><td class="hljs-ln-line hljs-ln-code" data-line-number=38>			} <span class=hljs-keyword>else</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=39><div class=hljs-ln-n data-line-number=39></div><td class="hljs-ln-line hljs-ln-code" data-line-number=39>				skipped_first = <span class=hljs-number>1</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=40><div class=hljs-ln-n data-line-number=40></div><td class="hljs-ln-line hljs-ln-code" data-line-number=40>			tptr++;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=41><div class=hljs-ln-n data-line-number=41></div><td class="hljs-ln-line hljs-ln-code" data-line-number=41>		}<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=42><div class=hljs-ln-n data-line-number=42></div><td class="hljs-ln-line hljs-ln-code" data-line-number=42>	}<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=43><div class=hljs-ln-n data-line-number=43></div><td class="hljs-ln-line hljs-ln-code" data-line-number=43> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=44><div class=hljs-ln-n data-line-number=44></div><td class="hljs-ln-line hljs-ln-code" data-line-number=44>	*result = <span class=hljs-string>'\0'</span>;<tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=45><div class=hljs-ln-n data-line-number=45></div><td class="hljs-ln-line hljs-ln-code" data-line-number=45> <tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=46><div class=hljs-ln-n data-line-number=46></div><td class="hljs-ln-line hljs-ln-code" data-line-number=46>	<span class=hljs-comment>/* Return to offset to the next symbol. */</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=47><div class=hljs-ln-n data-line-number=47></div><td class="hljs-ln-line hljs-ln-code" data-line-number=47>	<span class=hljs-keyword>return</span> off; <span class=hljs-comment>/* off返回的是下一个符号在kallsyms_names中的偏移值（字节为单位）*/</span><tr><td class="hljs-ln-line hljs-ln-numbers" data-line-number=48><div class=hljs-ln-n data-line-number=48></div><td class="hljs-ln-line hljs-ln-code" data-line-number=48>}</table></code></pre> 
+<p>font color=black size=3&gt;<strong>2.3 内核模块符号的查找过程</strong><br> 内核模块是在内核启动过程中动态加载到内核中的，所以，不能试图将模块中的符号嵌入到vmlinux中。加载模块时，模块的符号表被存放在该模块的struct module结构中。所有已加载的模块的structmodule结构都放在一个全局链表中。</p> 
+<p>在查找一个内核模块的符号时，调用的函数入口依然是kallsyms_lookup()，模块符号的实际查找工作在get_ksymbol()函数中完成，在这里我就不再讲解了，有兴趣的可以自己去看看。</p> 
+<blockquote> 
+ <p>参考博客链接地址：<br> <a href="https://blog.csdn.net/kehyuanyu/article/details/46346321?utm_medium=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&amp;depth_1-utm_source=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase" rel=noopener>Linux kallsyms 机制分析</a>。注意这篇博文里面有些索引和偏移量的概念说法不是很严谨，注意甄别。<br> <a href=https://blog.csdn.net/jasonchen_gbd/article/details/44025681 rel=noopener>内核符号表的生成和查找过程</a></p> 
+</blockquote>
+ 
+</div>
+<div id=MySignature role=contentinfo>
+ <div>作者：<a href=https://www.cnblogs.com/jianhua1992/ target=_blank>jianhua1992</a></div>
+<div>出处：<a href=https://www.cnblogs.com/jianhua1992/ target=_blank>https://www.cnblogs.com/jianhua1992/</a></div>
+<p>本文来自博客园，作者：<a href=https://www.cnblogs.com/jianhua1992/ target=_blank>BSP-路人甲</a>，转载请注明原文链接：<a href=https://www.cnblogs.com/jianhua1992/p/16852796.html target=_blank>https://www.cnblogs.com/jianhua1992/p/16852796.html</a>，并保留此段声明，否则保留追究法律责任的权利。</p>
+</div>
+<div class=clear></div>
+<div id=blog_post_info_block role=contentinfo>
+<div id=BlogPostCategory>
+ 分类: 
+ <a href=https://www.cnblogs.com/jianhua1992/category/2295264.html target=_blank>Linux2.6</a>
+</div>
+ <div id=blog_post_info>
+<div id=green_channel>
+ <a href=javascript:void(0) id=green_channel_digg>好文要顶</a>
+ <a id=green_channel_follow href=javascript:void(0)>关注我</a>
+ <a id=green_channel_favorite href=javascript:void(0)>收藏该文</a>
+ <a id=green_channel_wechat href=javascript:void(0)>微信分享</a>
+</div>
+<div id=author_profile>
+ <div id=author_profile_info class=author_profile_info>
+ <a href=https://home.cnblogs.com/u/jianhua1992/ target=_blank><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABHNCSVQICAgIfAhkiAAAButJREFUaIHNmctvXFcdxz/n3Oe8Pfb4Edd1xnGauk4aWqVtCASJqiqQ0AVhVUSB8g8g/oGAxKIIARsQqlghNkWoKkIQZUErsohQm1T0kShJE6WTxElsx/HYHs+duc9zDwuHEAqJPY5fn8WsRjrfz3n8zuOKdrutWSNqs7/mxJmf0AwM6s0ApQStUDA3n2KYDgvNhFQL5ucT0OC4kuk5Rc6Fri5oz0keGdIYJtiWwJQawwDXBUOCKSCIFYaCp3d8lSMHfo65VuGjZIYPar+g0VI0AwVIvGCpQaRJw4tIUo3ng5WFdkvSnFeUC1DMSSpdEj+rcC1wMiBEiiUlqU4Q0oRU4dqSancv+0Zf4ZnHj2IZ9loJaG4u/IXJ2028BHxlEEaKINREkUmSpsRa0FhM6et1+GQiwFGC/goIDY6paTYieisWdkaBEoCBaSgMw6CcNXANg2rvHr554K9Io4gmRSPWRiBO5jg3+Rp+qhEiQxynNJqKoJ2SCAM/1MQBdBVNrk77DBZt0kSTdwRhCL0FkwSBJEWFIEgplyQmDokK6cpZHH76dap9R9BSo7UGIQDWRqARXGau1SCIJUHsE0QCJGTzFrdnNdsG8py93CRtJvR3m8R+Sk85JU0EXQVJGKXYrkbKhELRQUcxSRSRz6fsq77Il/b+CtcaBKERwNIPayWgOXPjlzS9DHHSJvQBLfB9hWM7JCLmcq3FUK8g6xq4lkXsR5iOwDIFFmDakCQClCRYDKmUTHYN7uHgnh8z2PMCCOO+rT+0wIJ/lqtTJ1n0FJ4vqc9FpBoyGYeZeoCUMFjRlIoCoQWxjsjnNYY0sGxFGGiCEHKOIJeBndvGObj7KEOVryCls2z7Dy1wff7PLLQT6l5M4EGhlIUUvDCgUIDhAYkhIfA1GnBSTcaRGFKhFGRygnwGxrZ9mc9tf5Wh/kNI4ZKusP2HEohVg/PXj+EFCW1Pow2XxUZMPhdRHcgSJSGWTLEcTRqaZDIaSwuyOYGpDfqKI4z2H+axoW9RzDwBiLvzW26EwMXJP3BlqkYQShzHYWq2TbXfwM4KSrkYIQS2JbFlSpI1KOeK9OWfoVLazo6e71DIjaHFUgTNf63NFbNqAaVDPr72e+Y9hVQFWl6T8e1FxocH0NKl0jVMb347ObtK0d1JKfsUllFGa7kUVSwdAMRDxX8IgX/WfsalmxexdI527PPSc9/g0L7fYFmZpT9oCSJdCqYBodF3p8hnTy+rCw+rFNA65fzEm6SpjYnB0ZdP0lUY+3en3sl0T69+tnivIasQ0Jyq/RBl3makMsrLB/9ENtMHdzp7o+lYYNG/SOy+zUjffr6w43e4Zpl7q8dGIzo9Tn9Y+y093YpHit/DkFk2LTkgpexcYKo+yUDPAALBZoaHJYGV7hd3uTAxj+BOKdwCdCww/vjO/62Cm0hnAhpqVybWKcrq6ExAgB/prTQAnU+ha5PT65Fj1XQsEPreVlm/QIcCWmtI1XplWRUdj4CUd0S2CB0KCLrLRZRa6X1p/elIQCDY1lMhiuP1ytMxHR0lUp3iJxC2W3SXCuuZa0V0fpTQgqxj42+hEeh4I6s3WsgHvNNsNB3dB6JYsdhuY+qtU0o7GoEwUeSyLp7vr1eejlmxQKo1dT9ApTAzM7eemTpixQJRrEi1ZHZhgbYSJOnW2AtWLNAOItpRRG3iJsoQTNe99cy1YlYkEMcJ52qTCC0pl4oM91eY9TwazeZ651uWZauQ1prjJ05x+sIkvjLYv28EV+ZZbLY4efocr3xtP+VScSOy/l+W3Yn/+M67HPvbWWpTbbY/ug3Htdk1MkixYBDqlLmZG/zo+y9h2/ZGZb7LsjvxbMPjjbdOcH1qgdmGj5/A+xemOfPpTYpFjZW1cCo9vHH872zWJeEBU0jz5rF3uD3ToBHn2DM+xouf38WeuX/w7ed3EbammVi8RLZviLDdy2bd9O8roDW899F5wlDhZF1yxRyR2eTt9yOq297CyYFOCjw7foDGYkDT8yjk8xuZHVhmEYdhgJvPEXYrjHKd+q2EWBl8fGWe3uGUVjjAE4uakp0hjjbngHd/ASHZPTbC4RdKfHrrOMNDcwTRk7QagmMndvPYAcFzoxVC4Fa9yc7x6salvof7Cgg03eUBTl98l+qgTSI0pfxOCplL1JsBtavd1KM8dnKFvDHDwd0jG5n7Lg+sQq8eeZ5rn0hmbnVza7bFa6+/z2LTA53gem32j3Qhjet8fe/eTXutW3YfuDpxg+/+4Kdke6qYbh/V0X76unOMDWT56OIlDh0Y44vPPoXchCf2Fb9Ot9s+pz44z3unz+BFMTv6bYYfHeXJvWP09/au5weYB7Kq5/X/zJXNf92SUvIvqyjjFGjNXZkAAAAASUVORK5CYII=" class=author_avatar alt></a>
+ <div id=author_profile_detail class=author_profile_info>
+ <a href=https://home.cnblogs.com/u/jianhua1992/>BSP-路人甲</a>
+ <br>
+ <a href=https://home.cnblogs.com/u/jianhua1992/followers/>粉丝 - <span class=follower-count>15</span></a>
+ <a href=https://home.cnblogs.com/u/jianhua1992/followees/>关注 - <span class=following-count>2</span></a><br>
+ </div>
+ </div>
+ <div class=clear></div>
+ <div id=author_profile_honor></div>
+ <div id=author_profile_follow class=follow-tip>
+ <a href=javascript:void(0)>+加关注</a>
+ </div>
+</div>
+<div id=div_digg>
+ <div class=diggit>
+ <span class=diggnum id=digg_count>0</span>
+ </div>
+ <div class=buryit>
+ <span class=burynum id=bury_count>0</span>
+ </div>
+ <div class=clear></div>
+ <div class=diggword id=digg_tips>
+ </div>
+ <div id=vip_tip><a class=tip href=https://cnblogs.vip/ target=_blank>升级成为会员</a></div>
+</div>
+</div>
+ <div class=clear></div>
+ <div id=post_next_prev>
+ <br>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16879187.html class=p_n_p_prefix>» </a> 下一篇： <a href=https://www.cnblogs.com/jianhua1992/p/16879187.html data-featured-image title="发布于 2022-11-21 10:26">FIXMAP内存管理器 --- (四)</a>
+</div>
+</div>
+ </div>
+ <p class=postfoot>
+ posted on 
+<span id=post-date data-last-update-days=300.40477039668286 data-date-created=BlogServer.Application.Dto.BlogPost.BlogPostDto data-date-updated="2023-07-20 00:33" aria-expanded=false>2022-11-02 22:23</span>&nbsp;
+<a href=https://www.cnblogs.com/jianhua1992>BSP-路人甲</a>&nbsp;
+阅读(<span id=post_view_count>646</span>)&nbsp;
+评论(<span id=post_comment_count>0</span>)&nbsp;
+<a href="https://i.cnblogs.com/EditPosts.aspx?postid=16852796" rel=nofollow>编辑</a>&nbsp;
+<a href=javascript:void(0)>收藏</a>&nbsp;
+<a href=javascript:void(0)>举报</a>
+ </p>
+ </div>
+</div>
+<a id=!comments></a>
+<div id=blog-comments-placeholder class=sf-hidden></div>
+<div id=comment_form class=commentform>
+ <a name=commentform></a>
+ <div id=divCommentShow></div>
+ <div id=comment_nav>
+ <a class="comment-nav-left forpc" href=https://cnblogs.vip/ target=_blank>会员力量，点亮园子希望</a>
+ <div class=comment-nav-right>
+ <span id=span_refresh_tips></span><a href=#>刷新页面</a><a href=#top>返回顶部</a>
+ </div>
+ </div>
+ <div id=comment_form_container><div class=login_tips>
+ 登录后才能查看或发表评论，立即 <a rel=nofollow href=javascript:void(0) class=underline>登录</a> 或者
+ <a href=https://www.cnblogs.com/>逛逛</a> 博客园首页
+</div>
+</div>
+ <div class=ad_text_commentbox id=ad_text_under_commentbox></div>
+ <div id=cnblogs_ch class=sf-hidden></div>
+ <div id=opt_under_post></div>
+ <div id=cnblogs_c1 class="under-post-card sf-hidden">
+ 
+ </div>
+ <div id=under_post_card1><div class=under-post-card>
+<b>编辑推荐：</b>
+<br>
+· <a href=https://www.cnblogs.com/gmmy/p/18186750 target=_blank>使用 c# 强大的表达式树实现对象的深克隆</a>
+ <br>
+· <a href=https://www.cnblogs.com/alchemystar/p/18188082 target=_blank>日常 Bug 排查 - 连接突然全部关闭</a>
+ <br>
+· <a href=https://www.cnblogs.com/coco1s/p/18185832 target=_blank>「动画进阶」极具创意的鼠标交互动画</a>
+ <br>
+· <a href=https://www.cnblogs.com/lindexi/p/18186221 target=_blank>WPF 稳定的全屏化窗口方法</a>
+ <br>
+· <a href=https://www.cnblogs.com/sowler/p/18182447 target=_blank>云服务器遭到黑客入侵植入木马病毒排查过程</a>
+ <br>
+</div></div>
+ <div id=under_post_card2><div class="itnews under-post-card">
+ <b>阅读排行：</b>
+ <br>
+ · <a href=https://www.cnblogs.com/nocobase/p/18189034 target=_blank>一个不知名的开源项目可以带来多少收入</a>
+ <br>
+ · <a href=https://www.cnblogs.com/anding/p/18176056 target=_blank>C#.Net筑基-模式匹配汇总</a>
+ <br>
+ · <a href=https://www.cnblogs.com/xueweihan/p/18190491 target=_blank>3 个好玩的前端开源项目「GitHub 热点速览」</a>
+ <br>
+ · <a href=https://www.cnblogs.com/lzhdim/p/18170822 target=_blank>C#应用的欢迎界面窗体方案 - 开源研究系列文章</a>
+ <br>
+ · <a href=https://www.cnblogs.com/12lisu/p/18190600 target=_blank>MQ消息积压，把我整吐血了</a>
+ <br>
+</div></div>
+ <div id=HistoryToday class=under-post-card></div>
+ 
+</div>
+ </div>
+ </div>
+ <div id=leftmenu>
+ 
+<h3>导航</h3>
+<ul>
+ <li>
+ <a id=blog_nav_sitehome class=menu href=https://www.cnblogs.com/>
+博客园</a>
+ </li>
+ <li>
+ 
+<a id=blog_nav_myhome class=menu href=https://www.cnblogs.com/jianhua1992/>
+首页</a>
+ </li>
+ <li>
+ 
+<a id=blog_nav_newpost class=menu href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+ </li>
+ <li>
+ 
+<a id=blog_nav_contact class=menu href=https://msg.cnblogs.com/send/BSP-%E8%B7%AF%E4%BA%BA%E7%94%B2>
+联系</a>
+ </li>
+ <li>
+ 
+<a id=blog_nav_rss class=menu href=javascript:void(0) data-rss=https://www.cnblogs.com/jianhua1992/rss/>
+订阅</a>
+ 
+<a id=blog_nav_rss_image href=https://www.cnblogs.com/jianhua1992/rss/>
+ <img src="data:image/gif;base64,R0lGODlhEgAJALMAAAAAAP////9mAD8aASEOAeR3Lv+aV//m1Z9BA30zAv/IpP///wAAAAAAAAAAAAAAACH5BAEAAAsALAAAAAASAAkAAAQv8KhJq1XFiM27F4kWbONICiYonkFZciFpvu8WzyhXq3meuqPYZ2hDDI7IpHJAiAAAOw==" alt=订阅>
+</a>
+ </li>
+ <li>
+ 
+<a id=blog_nav_admin class=menu href=https://i.cnblogs.com/>
+管理</a>
+ </li>
+</ul>
+ <div id=blog-calendar>
+<table id=blogCalendar class=Cal cellspacing=0 cellpadding=0 title=Calendar border=0>
+ <tbody>
+ <tr>
+ <td colspan=7>
+ <table class=CalTitle cellspacing=0 border=0>
+ <tbody>
+ <tr>
+ <td class=CalNextPrev>
+ <a href=javascript:void(0)>&lt;</a>
+ </td>
+ <td align=center>2024年5月</td>
+ <td align=right class=CalNextPrev>
+ <a href=javascript:void(0)>&gt;</a>
+ </td>
+ </tr>
+ </tbody>
+ </table>
+ </td>
+ </tr>
+ <tr>
+ <th class=CalDayHeader align=center abbr=日 scope=col>日</th>
+ <th class=CalDayHeader align=center abbr=一 scope=col>一</th>
+ <th class=CalDayHeader align=center abbr=二 scope=col>二</th>
+ <th class=CalDayHeader align=center abbr=三 scope=col>三</th>
+ <th class=CalDayHeader align=center abbr=四 scope=col>四</th>
+ <th class=CalDayHeader align=center abbr=五 scope=col>五</th>
+ <th class=CalDayHeader align=center abbr=六 scope=col>六</th>
+ </tr>
+ <tr>
+ <td class=CalOtherMonthDay align=center>28</td>
+ <td class=CalOtherMonthDay align=center>29</td>
+ <td class=CalOtherMonthDay align=center>30</td>
+ <td align=center>
+ 1
+ </td>
+ <td align=center>
+ 2
+ </td>
+ <td align=center>
+ 3
+ </td>
+ <td class=CalWeekendDay align=center>
+ 4
+ </td>
+ </tr>
+ <tr>
+ <td class=CalWeekendDay align=center>
+ 5
+ </td>
+ <td align=center>
+ 6
+ </td>
+ <td align=center>
+ 7
+ </td>
+ <td align=center>
+ 8
+ </td>
+ <td align=center>
+ 9
+ </td>
+ <td align=center>
+ 10
+ </td>
+ <td class=CalWeekendDay align=center>
+ 11
+ </td>
+ </tr>
+ <tr>
+ <td class=CalWeekendDay align=center>
+ 12
+ </td>
+ <td align=center>
+ 13
+ </td>
+ <td align=center>
+ 14
+ </td>
+ <td class=CalTodayDay align=center>
+ 15
+ </td>
+ <td align=center>
+ 16
+ </td>
+ <td align=center>
+ 17
+ </td>
+ <td class=CalWeekendDay align=center>
+ 18
+ </td>
+ </tr>
+ <tr>
+ <td class=CalWeekendDay align=center>
+ 19
+ </td>
+ <td align=center>
+ 20
+ </td>
+ <td align=center>
+ 21
+ </td>
+ <td align=center>
+ 22
+ </td>
+ <td align=center>
+ 23
+ </td>
+ <td align=center>
+ 24
+ </td>
+ <td class=CalWeekendDay align=center>
+ 25
+ </td>
+ </tr>
+ <tr>
+ <td class=CalWeekendDay align=center>
+ 26
+ </td>
+ <td align=center>
+ 27
+ </td>
+ <td align=center>
+ 28
+ </td>
+ <td align=center>
+ 29
+ </td>
+ <td align=center>
+ 30
+ </td>
+ <td align=center>
+ 31
+ </td>
+ <td class=CalOtherMonthDay align=center>
+ 1
+ </td>
+ </tr>
+ <tr>
+ <td class=CalOtherMonthDay align=center>
+ 2
+ </td>
+ <td class=CalOtherMonthDay align=center>
+ 3
+ </td>
+ <td class=CalOtherMonthDay align=center>
+ 4
+ </td>
+ <td class=CalOtherMonthDay align=center>
+ 5
+ </td>
+ <td class=CalOtherMonthDay align=center>
+ 6
+ </td>
+ <td class=CalOtherMonthDay align=center>
+ 7
+ </td>
+ <td class=CalOtherMonthDay align=center>
+ 8
+ </td>
+ </tr>
+ </tbody>
+</table></div>
+ <div id=sidebar_news class=newsItem>
+ 
+<h3>公告</h3>
+<div id=blog-news> 
+ <div id=sidebar_news_content>
+<div id=profile_block>
+ 昵称：
+ <a href=https://home.cnblogs.com/u/jianhua1992/>
+ BSP-路人甲
+ </a>
+ <br>
+ 园龄：
+ <a href=https://home.cnblogs.com/u/jianhua1992/ title=入园时间：2022-09-14>
+ 1年8个月
+ </a>
+ <br>
+ 粉丝：
+ <a class=follower-count href=https://home.cnblogs.com/u/jianhua1992/followers/>
+ 15
+ </a>
+ <br>
+ 关注：
+ <a class=folowing-count href=https://home.cnblogs.com/u/jianhua1992/followees/>
+ 2
+ </a>
+ <div id=p_b_follow class=follow-tip>
+<a href=javascript:void(0)>+加关注</a></div>
+ 
+</div>
+</div>
+</div>
+ 
+</div>
+<div id=sidebar_c3 class=sf-hidden></div>
+ <div id=blog-sidecolumn>
+<div id=sidebar_search class=sidebar-block>
+ <div class="mySearch my-search">
+ <h3 class=catListTitle>搜索</h3>
+ <div id=sidebar_search_box>
+ <div id=widget_my_zzk class=div_my_zzk>
+ <input type=text id=q class=input_my_zzk value>&nbsp;<input type=button value=找找看 id=btnZzk class=btn_my_zzk>
+ </div>
+ 
+ </div>
+ </div>
+</div>
+<div id=sidebar_shortcut class=sidebar-block>
+<h3 class=catListTitle>
+常用链接
+</h3>
+<ul>
+ <li><a href=https://www.cnblogs.com/jianhua1992/p/ title=我的博客的随笔列表>我的随笔</a></li>
+<li><a href=https://www.cnblogs.com/jianhua1992/MyComments.html title=我的发表过的评论列表>我的评论</a></li>
+<li><a href=https://www.cnblogs.com/jianhua1992/OtherPosts.html title=我评论过的随笔列表>我的参与</a></li>
+<li><a href=https://www.cnblogs.com/jianhua1992/comments title=我的博客的评论列表>最新评论</a></li>
+<li><a href=https://www.cnblogs.com/jianhua1992/tag/ title=我的博客的标签列表>我的标签</a></li>
+</ul>
+</div>
+<div id=sidebar_toptags class=sidebar-block></div>
+<div id=sidebar_categories>
+ <h3>
+ 
+ <a class=sidebar-card-title-a href=https://www.cnblogs.com/jianhua1992/post-categories>随笔分类</a>
+ </h3>
+ <ul>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2243397.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>ARMV8(6)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2287112.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>ATF(2)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2295264.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>Linux2.6(15)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2242540.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>PHY驱动专题(3)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2343754.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>UART子系统(9)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2220188.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>uboot(9)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2220181.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>内存子系统(待整理完成统一开放)(8)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2238308.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>内核修炼杂项(3)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2297619.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>驱动合集(0)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/category/2220189.html style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>设备树(2)</a>
+ </li>
+ 
+ </ul>
+ <h3>
+ 
+随笔档案
+ </h3>
+ <ul>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2024/03 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2024年3月(4)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2024/02 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2024年2月(1)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2023/09 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2023年9月(4)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2023/08 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2023年8月(1)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2023/07 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2023年7月(1)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2023/05 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2023年5月(1)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2023/04 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2023年4月(2)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2023/03 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2023年3月(1)</a>
+ </li>
+ <li data-category-list-item-visible=true style=display:block>
+ 
+<a href=https://www.cnblogs.com/jianhua1992/p/archive/2022/11 style=--cnb-category-item-link-indent-size:calc(0*1em) class=category-item-link rel target>2022年11月(43)</a>
+ </li>
+ 
+ </ul>
+</div>
+<div id=sidebar_topviewedposts class=sidebar-block>
+<div id=topview_posts_wrap>
+ <h3 class=catListTitle>
+ <a href=https://www.cnblogs.com/jianhua1992/most-viewed class=sidebar-card-title-a>
+ 阅读排行榜
+</a>
+ </h3>
+ <div id=TopViewPostsBlock>
+ <ul style=word-break:break-all>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852784.html>
+ 1. 链接脚本(Linker Scripts)语法和规则解析(自官方手册)(16908)
+ </a>
+ </li>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852786.html>
+ 2. PHY驱动调试之 ---PHY设备驱动(三)(2903)
+ </a>
+ </li>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852792.html>
+ 3. linux内核Image/zImage/uImage的编译过程（十四）(1706)
+ </a>
+ </li>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852781.html>
+ 4. Cache的相关知识(二)(1537)
+ </a>
+ </li>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852775.html>
+ 5. UBOOT编译--- make xxx_deconfig过程详解(一)(1272)
+ </a>
+ </li>
+ </ul>
+ </div>
+</div></div>
+<div id=sidebar_topcommentedposts class=sidebar-block><div id=topfeedback_posts_wrap>
+ <h3 class=catListTitle>
+ <a href=https://www.cnblogs.com/jianhua1992/most-commented class=sidebar-card-title-a>评论排行榜</a>
+ </h3>
+ <div id=TopFeedbackPostsBlock>
+ <ul style=word-break:break-all>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852775.html>
+ 1. UBOOT编译--- make xxx_deconfig过程详解(一)(4)
+ </a>
+ </li>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852784.html>
+ 2. 链接脚本(Linker Scripts)语法和规则解析(自官方手册)(3)
+ </a>
+ </li>
+ </ul>
+ </div>
+</div></div>
+<div id=sidebar_topdiggedposts class=sidebar-block>
+<div id=topdigg_posts_wrap>
+ <div class=catListView>
+ <h3 class=catListTitle>
+ <a href=https://www.cnblogs.com/jianhua1992/most-liked class=sidebar-card-title-a>推荐排行榜</a>
+ </h3>
+ <div id=TopDiggPostsBlock>
+ <ul style=word-break:break-all>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852784.html>
+ 1. 链接脚本(Linker Scripts)语法和规则解析(自官方手册)(5)
+ </a>
+ </li>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/17396492.html>
+ 2. Linux reset子系统(1)
+ </a>
+ </li>
+ <li>
+ <a href=https://www.cnblogs.com/jianhua1992/p/16852786.html>
+ 3. PHY驱动调试之 ---PHY设备驱动(三)(1)
+ </a>
+ </li>
+ </ul>
+ </div>
+ </div>
+</div></div><div id=sidebar_recentcomments class=sidebar-block><div id=recent_comments_wrap class=RecentComment>
+ <h3 class=catListTitle><a href=https://www.cnblogs.com/jianhua1992/comments class=sidebar-card-title-a>最新评论</a></h3> 
+ <div class=RecentCommentBlock>
+ <ul>
+ <li class=recent_comment_title><a href=https://www.cnblogs.com/jianhua1992/p/16852784.html>1. Re:链接脚本(Linker Scripts)语法和规则解析(自官方手册)</a></li>
+ <li class=recent_comment_body><p>GNU 官网找 ld手册就行.这个是把手册的主要内容给翻译了一遍</p>
+</li>
+ <li class=recent_comment_author>--当最后一片树叶落下</li>
+ <li class=recent_comment_title><a href=https://www.cnblogs.com/jianhua1992/p/16852775.html>2. Re:UBOOT编译--- make xxx_deconfig过程详解(一)</a></li>
+ <li class=recent_comment_body>@今天你泪目了吗？ 谈不上 ，只是记录一下。防止时就久了忘记 反反复复的看 太浪费时间了...</li>
+ <li class=recent_comment_author>--BSP-路人甲</li>
+ <li class=recent_comment_title><a href=https://www.cnblogs.com/jianhua1992/p/16852784.html>3. Re:链接脚本(Linker Scripts)语法和规则解析(自官方手册)</a></li>
+ <li class=recent_comment_body><p>没有</p>
+</li>
+ <li class=recent_comment_author>--BSP-路人甲</li>
+ <li class=recent_comment_title><a href=https://www.cnblogs.com/jianhua1992/p/16852775.html>4. Re:UBOOT编译--- make xxx_deconfig过程详解(一)</a></li>
+ <li class=recent_comment_body>@所长 这是很久之前在CSDN上写的，排版乱，只是先迁移过来，后面会重新梳理，有些写的不一定对...</li>
+ <li class=recent_comment_author>--BSP-路人甲</li>
+ <li class=recent_comment_title><a href=https://www.cnblogs.com/jianhua1992/p/16852775.html>5. Re:UBOOT编译--- make xxx_deconfig过程详解(一)</a></li>
+ <li class=recent_comment_body><p>写的这么详细 ，学习了</p>
+</li>
+ <li class=recent_comment_author>--所长</li>
+ </ul>
+ </div>
+</div></div>
+</div>
+ 
+ </div>
+ </div>
+ <div class=clear></div>
+ <div id=footer>
+ <p id=footer>
+ Powered by: 
+ <br>
+ 
+ <a href=https://www.cnblogs.com/ id=footer_site_link>博客园</a>
+ <br>
+ Copyright © 2024 BSP-路人甲
+<br><span id=poweredby>Powered by .NET 8.0 on Kubernetes</span>
+</p>
+ </div>
+</div>
+ 
+ 
+ 
+<div style=z-index:998;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:none;flex-direction:column;align-items:center;justify-content:center>
+ 
+ </div>
